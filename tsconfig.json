@@ -3,6 +3,9 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    "paths": {
+      "@projecthub/shared": ["./dist/projecthub/shared"]
+    },
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
@@ -19,5 +22,13 @@
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true
   },
-  "files": []
+  "files": [],
+  "references": [
+    {
+      "path": "./projects/projecthub/shared/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/projecthub/shared/tsconfig.spec.json"
+    }
+  ]
 }
