@@ -136,6 +136,14 @@ describe('UsuarioStore - edicion y desactivacion', () => {
     expect(editado?.roles).toEqual(['Analista', 'Admin']);
   });
 
+  it('permite conservar el correo propio al editar (unicidad excluye al propio id)', () => {
+    const s = store();
+    expect(() =>
+      s.editarUsuario('u-analista', { correo: 'andres@projecthub.local' }, ADMIN),
+    ).not.toThrow();
+    expect(s.usuarioPorId('u-analista')?.correo).toBe('andres@projecthub.local');
+  });
+
   it('rechaza editar con correo de otro usuario', () => {
     const s = store();
     expect(() =>

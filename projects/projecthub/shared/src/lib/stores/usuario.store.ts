@@ -74,10 +74,7 @@ export class UsuarioStore {
     }
     let correo = actual.correo;
     if (cambios.correo !== undefined) {
-      correo = this.validarCorreo(cambios.correo);
-      if (this.existeCorreo(correo, usuarioId)) {
-        throw new ErrorDuplicado('usuario', 'correo', correo);
-      }
+      correo = this.validarCorreo(cambios.correo, usuarioId);
     }
     let roles = actual.roles;
     if (cambios.roles !== undefined) {
@@ -113,12 +110,12 @@ export class UsuarioStore {
     return limpio;
   }
 
-  private validarCorreo(correo: string): string {
+  private validarCorreo(correo: string, exceptoId?: string): string {
     const limpio = correo.trim().toLowerCase();
     if (!CORREO_RE.test(limpio)) {
       throw new ErrorValidacion('El correo no tiene un formato valido.');
     }
-    if (this.existeCorreo(limpio)) {
+    if (this.existeCorreo(limpio, exceptoId)) {
       throw new ErrorDuplicado('usuario', 'correo', limpio);
     }
     return limpio;
