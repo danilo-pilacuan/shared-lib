@@ -62,6 +62,19 @@ export class ProjectStore {
   private readonly entregablesSignal = signal<readonly Entregable[]>(ENTREGABLES_SEMILLA);
   private readonly bitacoraSignal = signal<readonly BitacoraEntrada[]>(BITACORA_SEMILLA);
 
+  /** Reemplaza el estado con datos del backend (13.3); no lanza. */
+  cargarDesdeBackend(datos: {
+    readonly proyectos: readonly Proyecto[];
+    readonly etapas: readonly EtapaTrabajo[];
+    readonly entregables: readonly Entregable[];
+    readonly bitacora: readonly BitacoraEntrada[];
+  }): void {
+    this.proyectosSignal.set(datos.proyectos);
+    this.etapasSignal.set(datos.etapas);
+    this.entregablesSignal.set(datos.entregables);
+    this.bitacoraSignal.set(datos.bitacora);
+  }
+
   // ---------- Lecturas ----------
 
   readonly proyectos = computed(() => this.proyectosSignal());

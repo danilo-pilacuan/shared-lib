@@ -30,6 +30,11 @@ function nuevoId(): string {
 export class UsuarioStore {
   private readonly usuariosSignal = signal<readonly Usuario[]>(USUARIOS_SEMILLA);
 
+  /** Reemplaza el catalogo con datos del backend (13.3); no lanza. */
+  cargarDesdeBackend(usuarios: readonly Usuario[]): void {
+    this.usuariosSignal.set(usuarios);
+  }
+
   /** Catalogo completo, incluidos inactivos (el historial no se borra). */
   readonly usuarios = computed(() => this.usuariosSignal());
 
