@@ -8,6 +8,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
+import { TokenAlmacen } from './autenticacion';
 import { Usuario } from '../domain/modelos';
 
 /** URL base de la API; el shell puede sobreescribirla con el token. */
@@ -28,6 +29,7 @@ export type EnlaceListener = (disponible: boolean) => void;
 export class ApiEnlaceService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = inject(API_BASE_URL);
+  private readonly tokenAlmacen = inject(TokenAlmacen);
   private disponible_ = true;
   private readonly listeners = new Set<EnlaceListener>();
 
@@ -49,13 +51,29 @@ export class ApiEnlaceService {
     }
   }
 
+  /**
+   * Cabeceras de la peticion: actor simulado (X-Actor-Id, compatibilidad) y
+   * Bearer JWT cuando hay sesion real (fase 14).
+   */
+  private cabeceras(actorId?: string): Record<string, string> | undefined {
+    const cabeceras: Record<string, string> = {};
+    const token = this.tokenAlmacen.leer();
+    if (token !== null) {
+      cabeceras['Authorization'] = `Bearer ${token}`;
+    }
+    if (actorId) {
+      cabeceras[ACTOR_HEADER] = actorId;
+    }
+    return Object.keys(cabeceras).length > 0 ? cabeceras : undefined;
+  }
+
   /** GET de coleccion; null si la API no responde (fallback a semilla). */
   async lista<T>(ruta: string, actorId?: string): Promise<readonly T[] | null> {
     try {
       const datos = await firstValueFrom(
         this.http
           .get<readonly T[]>(`${this.baseUrl}${ruta}`, {
-            headers: actorId ? { [ACTOR_HEADER]: actorId } : undefined,
+            headers: this.cabeceras(actorId),
           })
           .pipe(timeout(API_TIMEOUT_MS)),
       );
@@ -79,7 +97,7 @@ export class ApiEnlaceService {
         this.http
           .request<T>(metodo, `${this.baseUrl}${ruta}`, {
             body: cuerpo,
-            headers: { [ACTOR_HEADER]: actorId },
+            headers: this.cabeceras(actorId),
           })
           .pipe(timeout(API_TIMEOUT_MS)),
       );

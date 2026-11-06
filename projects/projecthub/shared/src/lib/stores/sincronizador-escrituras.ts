@@ -20,8 +20,10 @@ import {
 } from '@angular/core';
 import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, Usuario } from '../domain/modelos';
 import { ApiEnlaceService } from './api-enlace';
+import { AutenticacionService } from './autenticacion';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
+import { SESION_STORE, SesionStore } from './sesion.store';
 import { sincronizarStores } from './sincronizacion';
 
 /** Milisegundos de espera antes de empujar tras una rafaga de cambios. */
@@ -32,6 +34,7 @@ export class SincronizadorEscrituras {
   private readonly enlace = inject(ApiEnlaceService);
   private readonly projectStore = inject(ProjectStore);
   private readonly usuarioStore = inject(UsuarioStore);
+  private readonly sesion = inject(SESION_STORE, { optional: true }) ?? inject(SesionStore);
   private readonly zone = inject(NgZone);
 
   private temporizador: ReturnType<typeof setTimeout> | null = null;
@@ -147,9 +150,9 @@ export class SincronizadorEscrituras {
     }
   }
 
-  /** Actor de las escrituras: primer usuario activo de la sesion simulada. */
+  /** Actor de las escrituras: el usuario de la sesion (real o simulada). */
   private actorId(): string {
-    return this.usuarioStore.usuariosActivos()[0]?.id ?? 'sistema';
+    return this.sesion.usuarioActivo()?.id ?? 'sistema';
   }
 
   /**
@@ -226,7 +229,11 @@ export function proporcionarSincronizacionBackend(): EnvironmentProviders {
       // La referencia se captura ANTES del await: tras reanudar la promesa
       // el contexto de inyeccion ya no existe (causa del NG0203).
       const sincronizador = inject(SincronizadorEscrituras);
+      const autenticacion = inject(AutenticacionService);
       await sincronizarStores();
+      // Fase 14: si hay token guardado, restaura la sesion real (GET /me).
+      // Nunca lanza: sin backend valido deja la app en modo demo.
+      await autenticacion.restaurarSesion();
       sincronizador.preparar();
     }),
   ]);

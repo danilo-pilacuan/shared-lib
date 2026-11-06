@@ -48,6 +48,23 @@ export class SesionStore {
     this.usuarioActivoIdSignal.set(usuarioId);
   }
 
+  /**
+   * Registra un usuario en el catalogo de la sesion si no existe (fase 14):
+   * el usuario autenticado puede venir del backend (alta nueva) y no estar
+   * en la semilla. Si ya existe, lo reemplaza por la version actualizada.
+   */
+  registrarUsuario(usuario: Usuario): void {
+    this.usuariosSignal.update((lista) => {
+      const indice = lista.findIndex((u) => u.id === usuario.id);
+      if (indice === -1) {
+        return [...lista, usuario];
+      }
+      const copia = [...lista];
+      copia[indice] = usuario;
+      return copia;
+    });
+  }
+
   cerrar(): void {
     this.usuarioActivoIdSignal.set(null);
   }
