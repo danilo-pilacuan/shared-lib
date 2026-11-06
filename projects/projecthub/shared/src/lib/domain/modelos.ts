@@ -25,6 +25,8 @@ export interface EtapaTrabajo {
   readonly presupuestoConsumido: number;
   /** 0-100; el avance del proyecto se calcula, nunca se edita (4.3-4.4). */
   readonly avance: number;
+  /** Ids de etapas prerequisito del mismo proyecto; deben estar 100% para avance > 0 (6.5). */
+  readonly dependencias?: readonly string[];
 }
 
 export interface Proyecto {

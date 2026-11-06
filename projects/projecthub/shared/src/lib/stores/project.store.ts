@@ -23,6 +23,11 @@ import { evaluarGate, validarAprobacion } from '../domain/gates';
 import { exigirPermiso } from '../domain/matriz-permisos';
 import { validarTransicion } from '../domain/ciclo-vida';
 import {
+  dependientesDe,
+  exigirDependenciasCompletas,
+  validarDependencias,
+} from '../domain/dependencias';
+import {
   BITACORA_SEMILLA,
   ENTREGABLES_SEMILLA,
   ETAPAS_SEMILLA,
@@ -287,6 +292,11 @@ export class ProjectStore {
     const etapa: EtapaTrabajo = { ...datos, id: nuevoId('e'), presupuestoConsumido: 0 };
     validarEtapa(etapa);
     this.exigirResponsableActivo(etapa.responsableId);
+    validarDependencias(
+      etapa.id,
+      etapa.proyectoId,
+      [...this.etapasDeProyecto(etapa.proyectoId), etapa],
+    );
     this.etapasSignal.update((lista) => [...lista, etapa]);
     this.registrarBitacora({
       proyectoId: proyecto.id,
@@ -309,6 +319,12 @@ export class ProjectStore {
     if (cambios.responsableId !== undefined) {
       this.exigirResponsableActivo(cambios.responsableId);
     }
+    validarDependencias(
+      etapaId,
+      etapa.proyectoId,
+      this.etapasDeProyecto(etapa.proyectoId).map((e) => (e.id === etapaId ? candidata : e)),
+    );
+    exigirDependenciasCompletas(candidata, candidata.avance, this.etapasDeProyecto(etapa.proyectoId));
     this.etapasSignal.update((lista) => lista.map((e) => (e.id === etapaId ? candidata : e)));
   }
 
@@ -319,6 +335,12 @@ export class ProjectStore {
     this.exigirActorValido(actor);
     this.exigirEstadoEditable(proyecto.estado, 'eliminar etapas');
     exigirPermiso(proyecto.etapa, 'editarEtapaTrabajo', actor.roles);
+    const dependientes = dependientesDe(etapaId, this.etapasSignal());
+    if (dependientes.length > 0) {
+      throw new ErrorValidacion(
+        `No se puede eliminar "${etapa.nombre}": ${dependientes.length} etapa(s) dependen de ella.`,
+      );
+    }
     this.etapasSignal.update((lista) => lista.filter((e) => e.id !== etapaId));
   }
 
@@ -331,6 +353,7 @@ export class ProjectStore {
     exigirPermiso(proyecto.etapa, 'editarEtapaTrabajo', actor.roles);
     const candidata: EtapaTrabajo = { ...etapa, avance };
     validarEtapa(candidata);
+    exigirDependenciasCompletas(etapa, avance, this.etapasDeProyecto(etapa.proyectoId));
     this.etapasSignal.update((lista) => lista.map((e) => (e.id === etapaId ? candidata : e)));
   }
 

@@ -100,6 +100,7 @@ export const ETAPAS_SEMILLA: readonly EtapaTrabajo[] = [
     presupuestoAsignado: 70000,
     presupuestoConsumido: 41000,
     avance: 55,
+    dependencias: ['e1'],
   },
   {
     id: 'e3',
@@ -133,6 +134,7 @@ export const ETAPAS_SEMILLA: readonly EtapaTrabajo[] = [
     presupuestoAsignado: 60000,
     presupuestoConsumido: 0,
     avance: 0,
+    dependencias: ['e4'],
   },
 ];
 
