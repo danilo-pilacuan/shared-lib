@@ -4,3 +4,4 @@
  * aqui en fases posteriores (docs/funcionalidades.md 9.1).
  */
 export * from './lib/domain';
+export * from './lib/stores';
