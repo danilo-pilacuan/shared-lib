@@ -12,6 +12,15 @@ import { ApiEnlaceService } from './api-enlace';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
 
+/** Estado completo del dominio tal como lo intercambian cliente y backend. */
+export interface EstadoSincronizacion {
+  readonly usuarios: readonly Usuario[];
+  readonly proyectos: readonly Proyecto[];
+  readonly etapas: readonly EtapaTrabajo[];
+  readonly entregables: readonly Entregable[];
+  readonly bitacora: readonly BitacoraEntrada[];
+}
+
 /** Carga las colecciones del backend en los stores; no lanza si falla. */
 export async function sincronizarStores(): Promise<void> {
   const enlace = inject(ApiEnlaceService);

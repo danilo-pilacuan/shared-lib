@@ -115,4 +115,70 @@ describe('SincronizadorEscrituras', () => {
     expect(req.request.method).toBe('PUT');
     req.flush({});
   });
+
+  it('aplica la respuesta del servidor a los stores sin re-disparar el push', async () => {
+    TestBed.runInInjectionContext(() => sincronizador.observar());
+    sincronizador.preparar();
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+
+    usuarioStore.cargarDesdeBackend([
+      {
+        id: 'u-x',
+        nombre: 'Usuario X',
+        correo: 'x@projecthub.dev',
+        roles: ['Admin'],
+        activo: true,
+      },
+    ]);
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
+
+    const estadoServidor = {
+      usuarios: [
+        {
+          id: 'u-x',
+          nombre: 'Usuario X Normalizado',
+          correo: 'x@projecthub.dev',
+          roles: ['Admin'],
+          activo: true,
+        },
+      ],
+      proyectos: [
+        {
+          id: 'p-srv',
+          nombre: 'Proyecto del servidor',
+          descripcion: '',
+          patrocinadorId: 'u-x',
+          presupuestoEstimado: 500,
+          fechaObjetivo: '2027-01-31',
+          etapa: 'Planteamiento',
+          estado: 'Activo',
+        },
+      ],
+      etapas: [],
+      entregables: [],
+      bitacora: [],
+    };
+    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    req.flush(estadoServidor);
+
+    // La respuesta del servidor reemplaza el estado local (fuente de verdad
+    // compartida) y ese cambio es eco: no genera un segundo PUT.
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
+    expect(usuarioStore.usuarios()[0]?.nombre).toBe('Usuario X Normalizado');
+    expect(projectStore.proyectos().map((p) => p.id)).toContain('p-srv');
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+  });
+
+  it('no toca los stores cuando la respuesta no trae colecciones', async () => {
+    const promesa = sincronizador.empujar();
+    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    req.flush({ algo: 'no-colecciones' });
+    expect(await promesa).toBe(true);
+    expect(usuarioStore.usuarios().length).toBeGreaterThan(0);
+    expect(projectStore.proyectos().length).toBeGreaterThan(0);
+  });
 });

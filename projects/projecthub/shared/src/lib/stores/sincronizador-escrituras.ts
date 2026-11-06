@@ -2,16 +2,27 @@
  * Escrituras del frontend hacia el backend (docs/funcionalidades.md 13.4).
  * El cliente es la fuente de la verdad durante la sesion: tras cada
  * mutacion de los stores empuja su estado completo a PUT /api/sincronizacion
- * (re-sync total), con debounce para agrupar rrafagas de cambios. Si la API
+ * (re-sync total), con debounce para agrupar rafagas de cambios. Si la API
  * no responde reintenta en el siguiente cambio; nunca lanza (degradacion
- * elegante). Se instancia de forma eager via provideAppInitializer (la DI es
- * perezosa y sin inyeccion explicita el efecto no existiria): llamar
- * preparar() tras la carga inicial y observar() a continuacion.
+ * elegante). El arranque (carga inicial + efecto de escritura) queda en el
+ * provider proporcionarSincronizacionBackend(); las apps solo lo agregan a
+ * sus providers.
  */
-import { Injectable, NgZone, effect, inject } from '@angular/core';
+import {
+  ENVIRONMENT_INITIALIZER,
+  EnvironmentProviders,
+  inject,
+  Injectable,
+  NgZone,
+  effect,
+  makeEnvironmentProviders,
+  provideAppInitializer,
+} from '@angular/core';
+import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, Usuario } from '../domain/modelos';
 import { ApiEnlaceService } from './api-enlace';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
+import { sincronizarStores } from './sincronizacion';
 
 /** Milisegundos de espera antes de empujar tras una rafaga de cambios. */
 export const ESCRITURA_DEBOUNCE_MS = 400;
@@ -28,6 +39,19 @@ export class SincronizadorEscrituras {
   private pendiente = false;
   /** false hasta preparar(): la lectura inicial del efecto no empuja (eco). */
   private listo = false;
+  /**
+   * Referencias de estado aplicadas desde la respuesta del servidor. El
+   * efecto no corre sincrono con la escritura de las signals, asi que la
+   * supresion del eco se hace por identidad: si lo que lee el efecto es
+   * exactamente lo que el servidor confirmo, no se re-dispara el push.
+   */
+  private aplicada: {
+    usuarios: readonly Usuario[];
+    proyectos: readonly Proyecto[];
+    etapas: readonly EtapaTrabajo[];
+    entregables: readonly Entregable[];
+    bitacora: readonly BitacoraEntrada[];
+  } | null = null;
 
   /** Re-baselinea tras la carga inicial: el proximo cambio real dispara push. */
   preparar(): void {
@@ -38,11 +62,11 @@ export class SincronizadorEscrituras {
   observar(): void {
     let primeraLectura = true;
     effect(() => {
-      this.usuarioStore.usuarios();
-      this.projectStore.proyectos();
-      this.projectStore.etapas();
-      this.projectStore.entregables();
-      this.projectStore.bitacora();
+      const usuarios = this.usuarioStore.usuarios();
+      const proyectos = this.projectStore.proyectos();
+      const etapas = this.projectStore.etapas();
+      const entregables = this.projectStore.entregables();
+      const bitacora = this.projectStore.bitacora();
       if (primeraLectura) {
         primeraLectura = false;
         return;
@@ -50,8 +74,32 @@ export class SincronizadorEscrituras {
       if (!this.listo) {
         return;
       }
+      if (this.esEcoDelServidor(usuarios, proyectos, etapas, entregables, bitacora)) {
+        return;
+      }
       this.programarFueraDeZone();
     });
+  }
+
+  /** true si el estado actual de los stores es el confirmado por el servidor. */
+  private esEcoDelServidor(
+    usuarios: readonly Usuario[],
+    proyectos: readonly Proyecto[],
+    etapas: readonly EtapaTrabajo[],
+    entregables: readonly Entregable[],
+    bitacora: readonly BitacoraEntrada[],
+  ): boolean {
+    const aplicada = this.aplicada;
+    if (aplicada === null) {
+      return false;
+    }
+    return (
+      usuarios === aplicada.usuarios &&
+      proyectos === aplicada.proyectos &&
+      etapas === aplicada.etapas &&
+      entregables === aplicada.entregables &&
+      bitacora === aplicada.bitacora
+    );
   }
 
   /** Programa un empuje con debounce; multiple cambios = un solo envio. */
@@ -86,6 +134,9 @@ export class SincronizadorEscrituras {
         cuerpo,
         this.actorId(),
       );
+      if (respuesta !== null) {
+        this.aplicarRespuesta(respuesta);
+      }
       return respuesta !== null;
     } finally {
       this.enVuelo = false;
@@ -101,7 +152,82 @@ export class SincronizadorEscrituras {
     return this.usuarioStore.usuariosActivos()[0]?.id ?? 'sistema';
   }
 
+  /**
+   * Aplica el estado confirmado por el servidor a los stores (13.4). El
+   * efecto de escritura compara por identidad contra `aplicada` y no lo
+   * vuelve a programar: si el servidor normalizo algo, el store queda igual
+   * al del servidor sin generar un bucle de pushes.
+   */
+  private aplicarRespuesta(respuesta: Record<string, unknown>): void {
+    const usuarios = respuesta['usuarios'];
+    const proyectos = respuesta['proyectos'];
+    const etapas = respuesta['etapas'];
+    const entregables = respuesta['entregables'];
+    const bitacora = respuesta['bitacora'];
+    if (!Array.isArray(usuarios) && !Array.isArray(proyectos)) {
+      return;
+    }
+    if (Array.isArray(usuarios)) {
+      this.usuarioStore.cargarDesdeBackend(usuarios as Usuario[]);
+      this.aplicada = {
+        usuarios: usuarios as Usuario[],
+        proyectos: [],
+        etapas: [],
+        entregables: [],
+        bitacora: [],
+      };
+    }
+    if (
+      Array.isArray(proyectos) &&
+      Array.isArray(etapas) &&
+      Array.isArray(entregables) &&
+      Array.isArray(bitacora)
+    ) {
+      this.projectStore.cargarDesdeBackend({
+        proyectos: proyectos as Proyecto[],
+        etapas: etapas as EtapaTrabajo[],
+        entregables: entregables as Entregable[],
+        bitacora: bitacora as BitacoraEntrada[],
+      });
+      this.aplicada = {
+        usuarios: (Array.isArray(usuarios) ? usuarios : []) as Usuario[],
+        proyectos: proyectos as Proyecto[],
+        etapas: etapas as EtapaTrabajo[],
+        entregables: entregables as Entregable[],
+        bitacora: bitacora as BitacoraEntrada[],
+      };
+    }
+  }
+
   private programarFueraDeZone(): void {
     this.zone.runOutsideAngular(() => this.programar());
   }
+}
+
+/**
+ * Provider de arranque de la sincronizacion (13.3 + 13.4), una sola pieza
+ * para shell y remotes. Resuelve SincronizadorEscrituras dentro de
+ * ENVIRONMENT_INITIALIZER (contexto de inyeccion garantizado: evita el
+ * NG0203 de llamar inject() tras un await) y enciende el efecto de escritura;
+ * el initializer async solo hace la carga inicial del backend. Llamar
+ * preparar() tras el await re-baselinea el efecto.
+ */
+export function proporcionarSincronizacionBackend(): EnvironmentProviders {
+  return makeEnvironmentProviders([
+    {
+      provide: ENVIRONMENT_INITIALIZER,
+      multi: true,
+      useValue: () => {
+        // Contexto de inyeccion garantizado: aqui si se puede inject().
+        inject(SincronizadorEscrituras).observar();
+      },
+    },
+    provideAppInitializer(async () => {
+      // La referencia se captura ANTES del await: tras reanudar la promesa
+      // el contexto de inyeccion ya no existe (causa del NG0203).
+      const sincronizador = inject(SincronizadorEscrituras);
+      await sincronizarStores();
+      sincronizador.preparar();
+    }),
+  ]);
 }
