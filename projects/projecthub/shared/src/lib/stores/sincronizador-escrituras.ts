@@ -4,10 +4,11 @@
  * mutacion de los stores empuja su estado completo a PUT /api/sincronizacion
  * (re-sync total), con debounce para agrupar rrafagas de cambios. Si la API
  * no responde reintenta en el siguiente cambio; nunca lanza (degradacion
- * elegante). Debe instanciarse dentro de un contexto de inyeccion.
+ * elegante). Se instancia de forma eager via provideAppInitializer (la DI es
+ * perezosa y sin inyeccion explicita el efecto no existiria): llamar
+ * preparar() tras la carga inicial y observar() a continuacion.
  */
 import { Injectable, NgZone, effect, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
 import { ApiEnlaceService } from './api-enlace';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
@@ -15,7 +16,7 @@ import { UsuarioStore } from './usuario.store';
 /** Milisegundos de espera antes de empujar tras una rafaga de cambios. */
 export const ESCRITURA_DEBOUNCE_MS = 400;
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class SincronizadorEscrituras {
   private readonly enlace = inject(ApiEnlaceService);
   private readonly projectStore = inject(ProjectStore);
@@ -25,15 +26,30 @@ export class SincronizadorEscrituras {
   private temporizador: ReturnType<typeof setTimeout> | null = null;
   private enVuelo = false;
   private pendiente = false;
+  /** false hasta preparar(): la lectura inicial del efecto no empuja (eco). */
+  private listo = false;
+
+  /** Re-baselinea tras la carga inicial: el proximo cambio real dispara push. */
+  preparar(): void {
+    this.listo = true;
+  }
 
   /** Suscribe el empuje automatico a los cambios de los stores. */
   observar(): void {
+    let primeraLectura = true;
     effect(() => {
       this.usuarioStore.usuarios();
       this.projectStore.proyectos();
       this.projectStore.etapas();
       this.projectStore.entregables();
       this.projectStore.bitacora();
+      if (primeraLectura) {
+        primeraLectura = false;
+        return;
+      }
+      if (!this.listo) {
+        return;
+      }
       this.programarFueraDeZone();
     });
   }
