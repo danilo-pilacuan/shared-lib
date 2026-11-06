@@ -7,3 +7,4 @@ export * from './modelos';
 export * from './ciclo-vida';
 export * from './matriz-permisos';
 export * from './calculos';
+export * from './gates';

@@ -39,7 +39,7 @@ export interface Proyecto {
   readonly estado: EstadoProyecto;
 }
 
-/** Documento obligatorio de una etapa, con version y aprobacion. */
+/** Documento obligatorio de una etapa, con version y aprobacion (3.5). */
 export interface Entregable {
   readonly id: string;
   readonly proyectoId: string;
@@ -49,6 +49,8 @@ export interface Entregable {
   /** Quien aprobo; null mientras este pendiente. */
   readonly aprobadoPorId: string | null;
   readonly aprobadoEn: string | null; // ISO datetime
+  /** Autor del documento; no puede aprobarlo el mismo (gate). */
+  readonly creadoPorId: string;
 }
 
 /** Registro inmutable y con autor de transiciones y aprobaciones (3.5). */
