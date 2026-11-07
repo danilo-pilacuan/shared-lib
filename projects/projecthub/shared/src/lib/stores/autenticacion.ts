@@ -22,6 +22,8 @@ const CLAVE_TOKEN = 'projecthub.token';
 export type CodigoAutenticacion =
   | 'CREDENCIALES_INVALIDAS'
   | 'USUARIO_INACTIVO'
+  | 'CONTRASENA_ACTUAL_INVALIDA'
+  | 'VALIDACION'
   | 'BACKEND_NO_DISPONIBLE';
 
 /** Error de autenticacion con codigo estable para la UI. */
@@ -133,6 +135,55 @@ export class AutenticacionService {
     this.tokenSignal.set(null);
     this.tokenAlmacen.limpiar();
     this.sesion.cerrar();
+  }
+
+  /**
+   * Cambio de contrasena (14.5): exige la actual y politica minima en el
+   * servidor. Exige sesion real (hay token); ErrorAutenticacion con codigo
+   * CONTRASENA_ACTUAL_INVALIDA (401) o VALIDACION (422 politica/sin sesion).
+   * Al exito el token vigente sigue siendo valido: no invalida la sesion.
+   */
+  async cambiarContrasena(contrasenaActual: string, contrasenaNueva: string): Promise<void> {
+    const token = this.tokenSignal();
+    if (token === null) {
+      throw new ErrorAutenticacion('VALIDACION', 'Inicia sesion antes de cambiar la contrasena.');
+    }
+    try {
+      await firstValueFrom(
+        this.http
+          .put<void>(
+            `${this.baseUrl}/api/auth/contrasena`,
+            { contrasenaActual, contrasenaNueva },
+            { headers: { Authorization: `Bearer ${token}` } },
+          )
+          .pipe(timeout(API_TIMEOUT_MS)),
+      );
+    } catch (error) {
+      if (error instanceof HttpErrorResponse) {
+        const cuerpo = (error.error ?? {}) as {
+          codigo?: string;
+          mensaje?: string;
+          detail?: { codigo?: string; mensaje?: string };
+        };
+        const mensaje = cuerpo?.mensaje ?? cuerpo?.detail?.mensaje;
+        if (error.status === 401) {
+          throw new ErrorAutenticacion(
+            'CONTRASENA_ACTUAL_INVALIDA',
+            mensaje ?? 'La contrasena actual no es correcta.',
+          );
+        }
+        if (error.status === 422) {
+          throw new ErrorAutenticacion(
+            'VALIDACION',
+            mensaje ?? 'La contrasena nueva no cumple la politica minima.',
+          );
+        }
+      }
+      throw new ErrorAutenticacion(
+        'BACKEND_NO_DISPONIBLE',
+        'El backend no responde; reintenta mas tarde.',
+      );
+    }
   }
 
   private mapearError(error: unknown): ErrorAutenticacion {

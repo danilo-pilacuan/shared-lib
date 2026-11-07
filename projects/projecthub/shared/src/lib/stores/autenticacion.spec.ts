@@ -132,6 +132,45 @@ describe('AutenticacionService', () => {
     expect(TestBed.inject(SESION_STORE).haySesion()).toBe(false);
     expect(servicio.sesionReal()).toBe(false);
   });
+
+  // ----- Cambio de contrasena (14.5) -----
+
+  const CONTRASENA_URL = 'http://localhost:8100/api/auth/contrasena';
+
+  it('cambiarContrasena hace PUT con Bearer y cuerpo camelCase', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-de-diana');
+    const promesa = servicio.cambiarContrasena('actual-larga-1', 'nueva-larga-2');
+    const req = httpMock.expectOne(CONTRASENA_URL);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer jwt-de-diana');
+    expect(req.request.body).toEqual({ contrasenaActual: 'actual-larga-1', contrasenaNueva: 'nueva-larga-2' });
+    req.flush(null, { status: 200, statusText: 'OK' });
+    await promesa;
+  });
+
+  it('cambiarContrasena sin sesion real lanza VALIDACION sin llamar al backend', async () => {
+    const promesa = servicio.cambiarContrasena('actual-larga-1', 'nueva-larga-2');
+    await expect(promesa).rejects.toMatchObject({ codigo: 'VALIDACION' });
+    httpMock.expectNone(CONTRASENA_URL);
+  });
+
+  it('cambiarContrasena con 401 lanza CONTRASENA_ACTUAL_INVALIDA', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-de-diana');
+    const promesa = servicio.cambiarContrasena('mala', 'nueva-larga-2');
+    httpMock
+      .expectOne(CONTRASENA_URL)
+      .flush({ detail: { codigo: 'CONTRASENA_ACTUAL_INVALIDA', mensaje: 'no' } }, { status: 401, statusText: 'Unauthorized' });
+    await expect(promesa).rejects.toMatchObject({ codigo: 'CONTRASENA_ACTUAL_INVALIDA' });
+  });
+
+  it('cambiarContrasena con 422 lanza VALIDACION (politica)', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-de-diana');
+    const promesa = servicio.cambiarContrasena('actual-larga-1', 'corta');
+    httpMock
+      .expectOne(CONTRASENA_URL)
+      .flush({ detail: { codigo: 'VALIDACION', mensaje: 'politica' } }, { status: 422, statusText: 'Unprocessable Entity' });
+    await expect(promesa).rejects.toMatchObject({ codigo: 'VALIDACION' });
+  });
 });
 
 describe('ApiEnlaceService con sesion real', () => {
