@@ -144,7 +144,9 @@ export class AutenticacionService {
    * Al exito el token vigente sigue siendo valido: no invalida la sesion.
    */
   async cambiarContrasena(contrasenaActual: string, contrasenaNueva: string): Promise<void> {
-    const token = this.tokenSignal();
+    // El token se lee de TokenAlmacen (fuente de verdad, igual que
+    // restaurarSesion); el signal espejo solo se refresca via este servicio.
+    const token = this.tokenAlmacen.leer();
     if (token === null) {
       throw new ErrorAutenticacion('VALIDACION', 'Inicia sesion antes de cambiar la contrasena.');
     }
