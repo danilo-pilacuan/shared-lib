@@ -62,10 +62,28 @@ export class SincronizadorEscrituras {
     entregables: readonly Entregable[];
     bitacora: readonly BitacoraEntrada[];
   } | null = null;
+  /**
+   * Ids de bitacora confirmados por el servidor (iteracion 53, VULN-001).
+   * El push es append-only (3.5): solo se envian entradas propias del actor
+   * o ya confirmadas; una entrada ajena no confirmada (registrada por otro
+   * usuario en otra pestana, que este store aun no conoce) se omite para
+   * no atribuir acciones ajenas y no agotar los reintentos con 422.
+   */
+  private confirmadas = new Set<string>();
 
   /** Re-baselinea tras la carga inicial: el proximo cambio real dispara push. */
   preparar(): void {
     this.listo = true;
+  }
+
+  /**
+   * Confirma como enviadas las entradas de bitacora presentes en los
+   * stores tras la carga inicial (13.3). Sin esto, la primera lectura del
+   * efecto dejaria `confirmadas` vacio y el primer push omitiria el estado
+   * sembrado por el GET inicial.
+   */
+  private reBaselinearConfirmadas(): void {
+    this.confirmadas = new Set(this.projectStore.bitacora().map((b) => b.id));
   }
 
   /** Suscribe el empuje automatico a los cambios de los stores. */
@@ -79,6 +97,7 @@ export class SincronizadorEscrituras {
       const bitacora = this.projectStore.bitacora();
       if (primeraLectura) {
         primeraLectura = false;
+        this.reBaselinearConfirmadas();
         return;
       }
       if (!this.listo) {
@@ -152,12 +171,21 @@ export class SincronizadorEscrituras {
     }
     this.enVuelo = true;
     try {
+      const actor = this.actorId();
+      const bitacoraCompleta = this.projectStore.bitacora();
+      // VULN-001: el push de bitacora es append-only (solo entradas propias
+      // o ya confirmadas). Omitir lo demas evita atribuir acciones ajenas y
+      // que el reintento automatico agote 422 en bucle tras un login sin
+      // re-sincronizacion de stores.
+      const bitacora = bitacoraCompleta.filter(
+        (b) => b.autorId === actor || this.confirmadas.has(b.id),
+      );
       const cuerpo = {
         usuarios: this.usuarioStore.usuarios(),
         proyectos: this.projectStore.proyectos(),
         etapas: this.projectStore.etapas(),
         entregables: this.projectStore.entregables(),
-        bitacora: this.projectStore.bitacora(),
+        bitacora,
       };
       const respuesta = await this.enlace.enviar<Record<string, unknown>>(
         'PUT',
@@ -227,6 +255,10 @@ export class SincronizadorEscrituras {
         entregables: entregables as Entregable[],
         bitacora: bitacora as BitacoraEntrada[],
       });
+      // Confirma las ids que el servidor devolvio; si la respuesta no trajo
+      // bitacora (respuesta parcial de usuarios) conserva lo ya confirmado:
+      // pisarlo descartaria pushes propios en vuelo (iteracion 53).
+      this.confirmadas = new Set((bitacora as BitacoraEntrada[]).map((b) => b.id));
       this.aplicada = {
         usuarios: (Array.isArray(usuarios) ? usuarios : []) as Usuario[],
         proyectos: proyectos as Proyecto[],

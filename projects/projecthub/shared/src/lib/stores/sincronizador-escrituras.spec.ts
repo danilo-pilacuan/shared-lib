@@ -57,6 +57,56 @@ describe('SincronizadorEscrituras', () => {
     expect(await promesa).toBe(true);
   });
 
+  it('omite del push la bitacora ajena no confirmada y la envia tras el eco del servidor (VULN-001)', async () => {
+    // Estado stale: el store trae una entrada ajena (registrada por otro
+    // usuario en otra pestana) que el servidor aun no conoce. El push solo
+    // lleva propias o confirmadas: no atribuye acciones ajenas.
+    const propia = {
+      id: 'b-propia',
+      proyectoId: 'p1',
+      autorId: 'u-admin',
+      fecha: '2026-11-09T12:00:00Z',
+      tipo: 'cambio' as const,
+      etapaOrigen: null,
+      etapaDestino: null,
+      comentario: 'Propia del actor',
+    };
+    const ajena = {
+      ...propia,
+      id: 'b-ajena',
+      autorId: 'u-pm',
+      comentario: 'Registrada por el PM en otra pestana',
+    };
+    projectStore.cargarDesdeBackend({
+      proyectos: [],
+      etapas: [],
+      entregables: [],
+      bitacora: [propia, ajena],
+    });
+    const promesa = sincronizador.empujar();
+    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    expect(req.request.body.bitacora.map((b: { id: string }) => b.id)).toEqual(['b-propia']);
+    // El servidor responde con la bitacora autoritativa (incluye la ajena,
+    // registrada en servidor por el otro usuario): el eco la confirma y a
+    // partir de ahi el push puede llevarla sin atribucion falsa.
+    req.flush({
+      usuarios: [],
+      proyectos: [],
+      etapas: [],
+      entregables: [],
+      bitacora: [propia, ajena],
+    });
+    expect(await promesa).toBe(true);
+    const reintento = sincronizador.empujar();
+    const req2 = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    expect(req2.request.body.bitacora.map((b: { id: string }) => b.id)).toEqual([
+      'b-propia',
+      'b-ajena',
+    ]);
+    req2.flush({});
+    expect(await reintento).toBe(true);
+  });
+
   it('reporta false cuando la API no responde', async () => {
     const promesa = sincronizador.empujar();
     const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
