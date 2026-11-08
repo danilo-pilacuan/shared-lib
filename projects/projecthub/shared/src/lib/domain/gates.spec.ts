@@ -58,6 +58,7 @@ describe('evaluarGate', () => {
         aprobadoEn: '2026-11-05T10:00:00Z',
       }),
     ]);
+    expect(gate.aprobados).toEqual(['Acta de planteamiento']);
     expect(gate.abierto).toBe(true);
   });
 

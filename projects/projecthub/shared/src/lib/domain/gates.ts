@@ -27,6 +27,8 @@ export const APROBADORES_REQUERIDOS: readonly Rol[] = ['Admin', 'Sponsor'];
 export interface EstadoGate {
   readonly etapa: EtapaCicloVida;
   readonly entregables: readonly Entregable[];
+  /** Nombres obligatorios ya aprobados. */
+  readonly aprobados: readonly string[];
   /** Nombres obligatorios sin entregable cargado. */
   readonly faltantes: readonly string[];
   /** Nombres obligatorios con entregable aun sin aprobacion. */
@@ -45,6 +47,12 @@ export function evaluarGate(
 ): EstadoGate {
   const obligatorios = ENTREGABLES_OBLIGATORIOS[etapa];
   const deEtapa = entregables.filter((e) => e.etapa === etapa);
+  const obligatoriosDeEtapa = deEtapa.filter((e) =>
+    obligatorios.includes(e.nombre),
+  );
+  const aprobados = obligatoriosDeEtapa
+    .filter((e) => e.aprobadoPorId !== null)
+    .map((e) => e.nombre);
   const faltantes = obligatorios.filter(
     (nombre) => !deEtapa.some((e) => e.nombre === nombre),
   );
@@ -54,6 +62,7 @@ export function evaluarGate(
   return {
     etapa,
     entregables: deEtapa,
+    aprobados,
     faltantes,
     pendientesAprobacion,
     abierto: faltantes.length === 0 && pendientesAprobacion.length === 0,
