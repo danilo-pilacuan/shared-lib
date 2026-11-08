@@ -10,6 +10,8 @@ import {
   ApiEnlaceService,
   ESCRITURA_DEBOUNCE_MS,
   ProjectStore,
+  SESION_STORE,
+  SesionStore,
   SincronizadorEscrituras,
   UsuarioStore,
 } from './index';
@@ -18,6 +20,7 @@ describe('SincronizadorEscrituras', () => {
   let httpMock: HttpTestingController;
   let projectStore: ProjectStore;
   let usuarioStore: UsuarioStore;
+  let sesionStore: SesionStore;
   let sincronizador: SincronizadorEscrituras;
 
   beforeEach(() => {
@@ -27,15 +30,25 @@ describe('SincronizadorEscrituras', () => {
     httpMock = TestBed.inject(HttpTestingController);
     projectStore = TestBed.inject(ProjectStore);
     usuarioStore = TestBed.inject(UsuarioStore);
+    sesionStore = TestBed.inject(SESION_STORE);
+    sesionStore.seleccionar('u-admin');
     sincronizador = TestBed.inject(SincronizadorEscrituras);
+    // Los pushes requieren actor: sesion simulada con usuario semilla.
+    sesionStore.seleccionar('u-admin');
   });
 
   afterEach(() => {
     httpMock.verify();
   });
 
-  it('empuja el estado completo de los stores al backend', async () => {
-    const promesa = sincronizador.empujar();
+  it('no empuja sin sesion activa (modo demo): no hay actor valido', async () => {
+    sesionStore.cerrar();
+    expect(await sincronizador.empujar()).toBe(false);
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+  });
+
+  it('empuja el estado completo de los stores al backend', async () => {    const promesa = sincronizador.empujar();
     const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body.proyectos.length).toBe(projectStore.proyectos().length);

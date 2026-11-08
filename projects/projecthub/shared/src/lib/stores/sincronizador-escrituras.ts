@@ -118,6 +118,12 @@ export class SincronizadorEscrituras {
 
   /** Empuja el estado actual; reprograma si hubo cambios durante el envio. */
   async empujar(): Promise<boolean> {
+    // Sin sesion activa (modo demo, fase 13) no hay actor valido: el backend
+    // rechazaria la escritura con 404 (ENTIDAD_NO_ENCONTRADA). Los cambios
+    // de demo son efimeros: se omite el push.
+    if (this.actorId() === null) {
+      return false;
+    }
     if (this.enVuelo) {
       this.pendiente = true;
       return false;
@@ -135,7 +141,7 @@ export class SincronizadorEscrituras {
         'PUT',
         '/api/sincronizacion',
         cuerpo,
-        this.actorId(),
+        this.actorId() as string,
       );
       if (respuesta !== null) {
         this.aplicarRespuesta(respuesta);
@@ -150,9 +156,13 @@ export class SincronizadorEscrituras {
     }
   }
 
-  /** Actor de las escrituras: el usuario de la sesion (real o simulada). */
-  private actorId(): string {
-    return this.sesion.usuarioActivo()?.id ?? 'sistema';
+  /**
+   * Actor de las escrituras: el usuario de la sesion activa (13.4: "durante
+   * la sesion" el cliente empuja). Sin sesion (modo demo inicial) devuelve
+   * null y el push se omite: no existe un actor 'sistema' en el backend.
+   */
+  private actorId(): string | null {
+    return this.sesion.usuarioActivo()?.id ?? null;
   }
 
   /**
