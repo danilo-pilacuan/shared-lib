@@ -11,7 +11,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
-import { API_TIMEOUT_MS, API_BASE_URL } from './api-enlace';
+import { API_TIMEOUT_MS, API_BASE_URL, ApiEnlaceService } from './api-enlace';
 import { Usuario } from '../domain/modelos';
 import { SESION_STORE, SesionStore } from './sesion.store';
 
@@ -79,6 +79,21 @@ export class AutenticacionService {
 
   /** true si hay token guardado (sesion real, no simulada). */
   readonly sesionReal = computed(() => this.tokenSignal() !== null);
+
+  /**
+   * Veces que el backend invalido la sesion en pleno uso (14.6). La app
+   * shell reacciona: cierra sesion y redirige a /login?expirada=1.
+   */
+  readonly expiraciones = signal(0);
+
+  constructor() {
+    // Cuando ApiEnlaceService detecta el 401 SESION_INVALIDA limpia el
+    // token; aqui se refleja en el signal espejo y en la sesion simulada.
+    inject(ApiEnlaceService).onSesionExpirada(() => {
+      this.cerrarSesion();
+      this.expiraciones.update((n) => n + 1);
+    });
+  }
 
   /** Login: valida credenciales en el servidor y fija la sesion activa. */
   async iniciarSesion(correo: string, contrasena: string): Promise<Usuario> {

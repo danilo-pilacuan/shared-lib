@@ -26,6 +26,9 @@ const ACTOR_HEADER = 'X-Actor-Id';
 /** Callback opcional para avisar a las apps que el backend cayo (o volvio). */
 export type EnlaceListener = (disponible: boolean) => void;
 
+/** Callback para avisar que la sesion real expiro en pleno uso (14.6). */
+export type SesionExpiradaListener = () => void;
+
 /**
  * Estado de contacto con el backend, visible para la UI (iteracion 32):
  * 'verificando' al arrancar, 'disponible' tras un contacto exitoso,
@@ -47,6 +50,7 @@ export class ApiEnlaceService {
   private readonly tokenAlmacen = inject(TokenAlmacen);
   private disponible_ = true;
   private readonly listeners = new Set<EnlaceListener>();
+  private readonly oyentesSesionExpirada = new Set<SesionExpiradaListener>();
 
   /** Estado de contacto con la API para la UI (signal reactiva). */
   readonly estado = signal<EstadoApi>('verificando');
@@ -62,6 +66,11 @@ export class ApiEnlaceService {
   /** Suscribe un callback de cambio de disponibilidad. */
   onCambio(listener: EnlaceListener): void {
     this.listeners.add(listener);
+  }
+
+  /** Suscribe un callback que corre cuando el backend invalida la sesion (14.6). */
+  onSesionExpirada(listener: SesionExpiradaListener): void {
+    this.oyentesSesionExpirada.add(listener);
   }
 
   /** Marca el estado y notifica solo en transicion. */
@@ -187,9 +196,33 @@ export class ApiEnlaceService {
     if (this.esCaidaReal(error)) {
       this.marcar(false);
     } else if (error instanceof HttpErrorResponse) {
+      if (this.esSesionExpirada(error)) {
+        this.notificarSesionExpirada();
+      }
       // La API respondio (4xx): sigue disponible.
       this.marcar(true);
     }
+  }
+
+  /**
+   * 401 con codigo SESION_INVALIDA significa que el backend valido el token
+   * y lo rechazo (expirado o usuario eliminado): la sesion real ya no es
+   * recuperable y el token almacenado queda inservible (docs 14.6). Se
+   * limpia el token y se avisa a la app; el estado de salud de la API no
+   * cambia porque el backend esta vivo.
+   */
+  private esSesionExpirada(error: HttpErrorResponse): boolean {
+    if (error.status !== 401 || this.tokenAlmacen.leer() === null) {
+      return false;
+    }
+    const cuerpo = error.error as { detail?: { codigo?: unknown }; codigo?: unknown } | null;
+    const codigo = cuerpo?.detail?.codigo ?? cuerpo?.codigo;
+    return codigo === 'SESION_INVALIDA';
+  }
+
+  private notificarSesionExpirada(): void {
+    this.tokenAlmacen.limpiar();
+    this.oyentesSesionExpirada.forEach((oyente) => oyente());
   }
 }
 

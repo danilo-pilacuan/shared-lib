@@ -150,6 +150,38 @@ describe('AutenticacionService', () => {
     expect(servicio.sesionReal()).toBe(false);
   });
 
+  // ----- Sesion expirada en pleno uso (14.6) -----
+
+  it('401 SESION_INVALIDA en cualquier ruta cierra la sesion y cuenta la expiracion', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
+    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
+    httpMock
+      .expectOne('http://localhost:8100/api/usuarios')
+      .flush(
+        { detail: { codigo: 'SESION_INVALIDA', mensaje: 'Tu sesion ha expirado.' } },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+    await promesa;
+    expect(TestBed.inject(TokenAlmacen).leer()).toBeNull();
+    expect(TestBed.inject(SESION_STORE).haySesion()).toBe(false);
+    expect(servicio.sesionReal()).toBe(false);
+    expect(servicio.expiraciones()).toBe(1);
+  });
+
+  it('401 sin codigo SESION_INVALIDA no cierra la sesion (login fallido)', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
+    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
+    httpMock
+      .expectOne('http://localhost:8100/api/usuarios')
+      .flush({ detail: { codigo: 'CREDENCIALES_INVALIDAS' } }, { status: 401, statusText: 'Unauthorized' });
+    await promesa;
+    expect(TestBed.inject(TokenAlmacen).leer()).toBe('jwt-vigente');
+    expect(TestBed.inject(SESION_STORE).haySesion()).toBe(true);
+    expect(servicio.expiraciones()).toBe(0);
+  });
+
   // ----- Cambio de contrasena (14.5) -----
 
   const CONTRASENA_URL = 'http://localhost:8100/api/auth/contrasena';
