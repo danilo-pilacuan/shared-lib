@@ -61,7 +61,6 @@ describe('ApiEnlaceService', () => {
 });
 
 describe('sincronizarStores', () => {
-  let enlace: ApiEnlaceService;
   let httpMock: HttpTestingController;
   let projectStore: ProjectStore;
   let usuarioStore: UsuarioStore;
@@ -70,7 +69,6 @@ describe('sincronizarStores', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
-    enlace = TestBed.inject(ApiEnlaceService);
     httpMock = TestBed.inject(HttpTestingController);
     projectStore = TestBed.inject(ProjectStore);
     usuarioStore = TestBed.inject(UsuarioStore);
