@@ -89,6 +89,23 @@ describe('AutenticacionService', () => {
     await promesa.catch((e) => expect(e.codigo).toBe('USUARIO_INACTIVO'));
   });
 
+  it('rate limit (429) lanza LIMITE_INTENTOS con el mensaje del backend', async () => {
+    // VULN-003: el backend rechaza por exceso de fallos; la UI no debe
+    // mostrar "backend no disponible" (la API esta viva).
+    const promesa = servicio.iniciarSesion('diana@projecthub.local', 'mala');
+    httpMock
+      .expectOne(LOGIN_URL)
+      .flush(
+        { detail: { codigo: 'LIMITE_INTENTOS', mensaje: 'Demasiados intentos fallidos; reintente mas tarde.' } },
+        { status: 429, statusText: 'Too Many Requests' },
+      );
+    await expect(promesa).rejects.toMatchObject({
+      codigo: 'LIMITE_INTENTOS',
+      message: 'Demasiados intentos fallidos; reintente mas tarde.',
+    });
+    expect(servicio.sesionReal()).toBe(false);
+  });
+
   it('backend caido lanza BACKEND_NO_DISPONIBLE sin tocar la sesion', async () => {
     const promesa = servicio.iniciarSesion('diana@projecthub.local', 'clave');
     httpMock.expectOne(LOGIN_URL).error(new ProgressEvent('error'));

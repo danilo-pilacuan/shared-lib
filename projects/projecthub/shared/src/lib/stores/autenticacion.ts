@@ -23,6 +23,7 @@ export type CodigoAutenticacion =
   | 'CREDENCIALES_INVALIDAS'
   | 'USUARIO_INACTIVO'
   | 'CONTRASENA_ACTUAL_INVALIDA'
+  | 'LIMITE_INTENTOS'
   | 'VALIDACION'
   | 'BACKEND_NO_DISPONIBLE';
 
@@ -200,6 +201,15 @@ export class AutenticacionService {
         return new ErrorAutenticacion(
           'USUARIO_INACTIVO',
           'Un usuario inactivo no puede iniciar sesion.',
+        );
+      }
+      if (error.status === 429) {
+        // Rate limit del backend (mitigacion VULN-003): mensaje propio, no
+        // "backend no disponible" (la API esta viva, solo rechazo).
+        const cuerpo = error.error as { detail?: { mensaje?: string } } | null;
+        return new ErrorAutenticacion(
+          'LIMITE_INTENTOS',
+          cuerpo?.detail?.mensaje ?? 'Demasiados intentos fallidos; reintente mas tarde.',
         );
       }
     }
