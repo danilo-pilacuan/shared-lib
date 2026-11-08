@@ -6,3 +6,4 @@ export * from './api-enlace';
 export * from './sincronizacion';
 export * from './sincronizador-escrituras';
 export * from './autenticacion';
+export * from './remote-loader';
