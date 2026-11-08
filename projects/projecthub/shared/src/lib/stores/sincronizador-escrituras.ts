@@ -40,6 +40,13 @@ export class SincronizadorEscrituras {
   private temporizador: ReturnType<typeof setTimeout> | null = null;
   private enVuelo = false;
   private pendiente = false;
+  /**
+   * Cambios hechos durante una caida (empujar() devolvio false). Al
+   * recuperar la API se re-empujan automaticamente (iteracion 35): si el
+   * usuario no vuelve a tocar nada, sin esto se perderian al cerrar la
+   * pestaña porque el push solo se reprograma con un nuevo cambio.
+   */
+  private conCambiosNoEnviados = false;
   /** false hasta preparar(): la lectura inicial del efecto no empuja (eco). */
   private listo = false;
   /**
@@ -116,6 +123,21 @@ export class SincronizadorEscrituras {
     }, ESCRITURA_DEBOUNCE_MS);
   }
 
+  /**
+   * Re-empuja automaticamente al recuperar la API (iteracion 35). El
+   * sondeo de salud llama a onCambio; en la transicion a disponible, si
+   * hubo escrituras fallidas durante la caida, programa un push. La
+   * desuscripcion la gestiona el ciclo de vida de la app (root provider).
+   */
+  conectarRecuperacion(): void {
+    this.enlace.onCambio((disponible) => {
+      if (disponible && this.conCambiosNoEnviados) {
+        this.conCambiosNoEnviados = false;
+        this.programar();
+      }
+    });
+  }
+
   /** Empuja el estado actual; reprograma si hubo cambios durante el envio. */
   async empujar(): Promise<boolean> {
     // Sin sesion activa (modo demo, fase 13) no hay actor valido: el backend
@@ -144,7 +166,10 @@ export class SincronizadorEscrituras {
         this.actorId() as string,
       );
       if (respuesta !== null) {
+        this.conCambiosNoEnviados = false;
         this.aplicarRespuesta(respuesta);
+      } else {
+        this.conCambiosNoEnviados = true;
       }
       return respuesta !== null;
     } finally {
@@ -232,7 +257,10 @@ export function proporcionarSincronizacionBackend(): EnvironmentProviders {
       multi: true,
       useValue: () => {
         // Contexto de inyeccion garantizado: aqui si se puede inject().
-        inject(SincronizadorEscrituras).observar();
+        const sincronizador = inject(SincronizadorEscrituras);
+        sincronizador.observar();
+        // Re-push automatico de cambios hechos durante una caida (it. 35).
+        sincronizador.conectarRecuperacion();
       },
     },
     provideAppInitializer(async () => {

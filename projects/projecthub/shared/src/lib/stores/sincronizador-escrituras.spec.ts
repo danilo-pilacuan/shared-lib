@@ -7,6 +7,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import {
+  ApiEnlaceService,
   ESCRITURA_DEBOUNCE_MS,
   ProjectStore,
   SESION_STORE,
@@ -192,5 +193,84 @@ describe('SincronizadorEscrituras', () => {
     expect(await promesa).toBe(true);
     expect(usuarioStore.usuarios().length).toBeGreaterThan(0);
     expect(projectStore.proyectos().length).toBeGreaterThan(0);
+  });
+
+  it('re-empuja automaticamente los cambios hechos durante una caida al recuperar la API', async () => {
+    TestBed.runInInjectionContext(() => sincronizador.observar());
+    TestBed.runInInjectionContext(() => sincronizador.conectarRecuperacion());
+    sincronizador.preparar();
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+
+    // Cambio durante la caida: el PUT falla y queda pendiente.
+    const enlace = TestBed.inject(ApiEnlaceService);
+    enlace.marcar(false);
+    usuarioStore.cargarDesdeBackend([
+      {
+        id: 'u-offline',
+        nombre: 'Hecho sin API',
+        correo: 'off@projecthub.dev',
+        roles: ['Admin'],
+        activo: true,
+      },
+    ]);
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
+    const fallido = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    expect(fallido.request.body.usuarios.map((u: { id: string }) => u.id)).toContain('u-offline');
+    fallido.error(new ProgressEvent('error'));
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Sin nuevo cambio, la recuperacion sola debe disparar el re-push.
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    enlace.marcar(true);
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
+    const reintento = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    expect(reintento.request.method).toBe('PUT');
+    expect(reintento.request.body.usuarios.map((u: { id: string }) => u.id)).toContain('u-offline');
+    reintento.flush({});
+  });
+
+  it('no re-empuja al recuperar si no hubo cambios durante la caida', async () => {
+    TestBed.runInInjectionContext(() => sincronizador.observar());
+    TestBed.runInInjectionContext(() => sincronizador.conectarRecuperacion());
+    sincronizador.preparar();
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
+
+    const enlace = TestBed.inject(ApiEnlaceService);
+    enlace.marcar(false);
+    await new Promise((r) => setTimeout(r, 50));
+    enlace.marcar(true);
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+  });
+
+  it('un empuje exitoso limpia la bandera de cambios no enviados', async () => {
+    const enlace = TestBed.inject(ApiEnlaceService);
+    TestBed.runInInjectionContext(() => sincronizador.conectarRecuperacion());
+    enlace.marcar(false);
+    const promesa = sincronizador.empujar();
+    const fallido = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    fallido.error(new ProgressEvent('error'));
+    expect(await promesa).toBe(false);
+    await new Promise((r) => setTimeout(r, 50));
+
+    // La API vuelve y el re-push automatico sale bien: la bandera se limpia
+    // y un ciclo caida/recuperacion posterior ya no re-empuja.
+    enlace.marcar(true);
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
+    const reintento = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    reintento.flush({});
+    await new Promise((r) => setTimeout(r, 50));
+
+    enlace.marcar(false);
+    await new Promise((r) => setTimeout(r, 50));
+    enlace.marcar(true);
+    await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
+    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
   });
 });
