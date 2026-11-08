@@ -9,4 +9,5 @@ export * from './matriz-permisos';
 export * from './calculos';
 export * from './gates';
 export * from './csv';
+export * from './pdf';
 export * from './dependencias';
