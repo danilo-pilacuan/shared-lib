@@ -50,6 +50,27 @@ describe('ApiEnlaceService', () => {
     expect(enlace.disponible).toBe(false);
   });
 
+  it('un 4xx (sesion ausente, VULN-002) NO marca al backend caido', async () => {
+    // En modo demo (sin token) los GET de dominio ahora responden 422
+    // VALIDACION: la API esta viva y solo rechazo la peticion anonima.
+    const promesa = enlace.lista<Usuario>('/api/usuarios');
+    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    req.flush({ codigo: 'VALIDACION', mensaje: 'Sesion requerida' }, { status: 422, statusText: 'Unprocessable Entity' });
+    const datos = await promesa;
+    expect(datos).toBeNull();
+    expect(enlace.disponible).toBe(true);
+    expect(enlace.estado()).toBe('disponible');
+  });
+
+  it('un 5xx si marca al backend caido', async () => {
+    const promesa = enlace.lista<Usuario>('/api/usuarios');
+    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    req.flush({ codigo: 'ERROR_INTERNO' }, { status: 500, statusText: 'Internal Server Error' });
+    const datos = await promesa;
+    expect(datos).toBeNull();
+    expect(enlace.disponible).toBe(false);
+  });
+
   it('envia el header X-Actor-Id cuando se pasa actor', async () => {
     const promesa = enlace.enviar('POST', '/api/proyectos', { nombre: 'X' }, 'u-admin');
     const req = httpMock.expectOne('http://localhost:8100/api/proyectos');
@@ -131,6 +152,19 @@ describe('sincronizarStores', () => {
     for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
       const req = httpMock.expectOne(`http://localhost:8100${ruta}`);
       req.error(new ProgressEvent('error'));
+    }
+    await promesa;
+    expect(projectStore.proyectos().length).toBe(PROYECTOS_SEMILLA.length);
+    expect(usuarioStore.usuarios().length).toBe(USUARIOS_SEMILLA.length);
+  });
+
+  it('conserva las semillas cuando la API rechaza la peticion anonima (422)', async () => {
+    // Modo demo sin sesion: los GET de dominio exigen actor (VULN-002) y
+    // responden 422; el fallback a semilla es el comportamiento esperado.
+    const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
+    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
+      const req = httpMock.expectOne(`http://localhost:8100${ruta}`);
+      req.flush({ codigo: 'VALIDACION' }, { status: 422, statusText: 'Unprocessable Entity' });
     }
     await promesa;
     expect(projectStore.proyectos().length).toBe(PROYECTOS_SEMILLA.length);

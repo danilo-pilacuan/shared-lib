@@ -8,6 +8,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
+import { TimeoutError } from 'rxjs';
 import { TokenAlmacen } from './autenticacion';
 import { Usuario } from '../domain/modelos';
 
@@ -168,9 +169,26 @@ export class ApiEnlaceService {
     }
   }
 
+  /**
+   * Clasifica el error de contacto con la API. Solo un problema de red,
+   * timeout o un 5xx del servidor consideran al backend caido: un 4xx
+   * (VALIDACION 422 por sesion ausente en modo demo, 404, 409) demuestra
+   * que la API esta viva y rechazo la peticion (mitigacion VULN-002),
+   * de modo que el banner no anuncia una caida inexistente.
+   */
+  private esCaidaReal(error: unknown): boolean {
+    if (error instanceof HttpErrorResponse) {
+      return error.status === 0 || error.status >= 500;
+    }
+    return error instanceof Error || error instanceof TimeoutError;
+  }
+
   private registrarCaida(error: unknown): void {
-    if (error instanceof HttpErrorResponse || error instanceof Error) {
+    if (this.esCaidaReal(error)) {
       this.marcar(false);
+    } else if (error instanceof HttpErrorResponse) {
+      // La API respondio (4xx): sigue disponible.
+      this.marcar(true);
     }
   }
 }
