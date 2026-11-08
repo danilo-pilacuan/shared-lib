@@ -61,6 +61,18 @@ export const ETIQUETA_ROL: Readonly<Record<Rol, string>> = {
   Stakeholder: 'Stakeholder',
 };
 
+/** Tipos de registro de la bitacora (docs/funcionalidades.md 3.5). */
+export const TIPOS_BITACORA = ['transicion', 'aprobacion', 'cambio'] as const;
+
+export type TipoBitacora = (typeof TIPOS_BITACORA)[number];
+
+/** Etiqueta en espanol para UI (los identificadores quedan en ASCII). */
+export const ETIQUETA_TIPO_BITACORA: Readonly<Record<TipoBitacora, string>> = {
+  transicion: 'Transicion',
+  aprobacion: 'Aprobacion',
+  cambio: 'Cambio',
+};
+
 /** Acciones gobernadas por la matriz de responsabilidades (1.5). */
 export const ACCIONES = [
   'verProyecto',

@@ -2,7 +2,7 @@
  * Modelos de dominio (docs/funcionalidades.md 1.1, 2.1, 3.5, 4.1, 9.1).
  * Interfaces puras; el store los materializa con signals en fase posterior.
  */
-import { Accion, EstadoProyecto, EtapaCicloVida, Rol } from './catalogos';
+import { Accion, EstadoProyecto, EtapaCicloVida, Rol, TipoBitacora } from './catalogos';
 
 export interface Usuario {
   readonly id: string;
@@ -61,7 +61,7 @@ export interface BitacoraEntrada {
   readonly proyectoId: string;
   readonly autorId: string;
   readonly fecha: string; // ISO datetime
-  readonly tipo: 'transicion' | 'aprobacion' | 'cambio';
+  readonly tipo: TipoBitacora;
   /** Etapa origen -> destino en transiciones; null en otros tipos. */
   readonly etapaOrigen: EtapaCicloVida | null;
   readonly etapaDestino: EtapaCicloVida | null;
