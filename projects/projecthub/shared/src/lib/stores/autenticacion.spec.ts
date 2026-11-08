@@ -182,6 +182,42 @@ describe('AutenticacionService', () => {
     expect(servicio.expiraciones()).toBe(0);
   });
 
+  // ----- Cuenta desactivada en pleno uso (14.7) -----
+
+  it('403 USUARIO_INACTIVO con token vigente cierra la sesion y cuenta la desactivacion', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
+    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
+    httpMock
+      .expectOne('http://localhost:8100/api/usuarios')
+      .flush(
+        { detail: { codigo: 'USUARIO_INACTIVO', mensaje: 'Tu cuenta fue desactivada.' } },
+        { status: 403, statusText: 'Forbidden' },
+      );
+    await promesa;
+    expect(TestBed.inject(TokenAlmacen).leer()).toBeNull();
+    expect(TestBed.inject(SESION_STORE).haySesion()).toBe(false);
+    expect(servicio.sesionReal()).toBe(false);
+    expect(servicio.desactivaciones()).toBe(1);
+    expect(servicio.expiraciones()).toBe(0);
+  });
+
+  it('403 sin codigo USUARIO_INACTIVO no cierra la sesion (permiso denegado)', async () => {
+    TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
+    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
+    httpMock
+      .expectOne('http://localhost:8100/api/usuarios')
+      .flush(
+        { detail: { codigo: 'PERMISO_DENEGADO', mensaje: 'Requiere Admin.' } },
+        { status: 403, statusText: 'Forbidden' },
+      );
+    await promesa;
+    expect(TestBed.inject(TokenAlmacen).leer()).toBe('jwt-vigente');
+    expect(TestBed.inject(SESION_STORE).haySesion()).toBe(true);
+    expect(servicio.desactivaciones()).toBe(0);
+  });
+
   // ----- Cambio de contrasena (14.5) -----
 
   const CONTRASENA_URL = 'http://localhost:8100/api/auth/contrasena';

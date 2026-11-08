@@ -30,6 +30,12 @@ export type EnlaceListener = (disponible: boolean) => void;
 export type SesionExpiradaListener = () => void;
 
 /**
+ * Callback para avisar que la cuenta del actor fue desactivada en pleno uso
+ * (14.7): token vigente, usuario conocido, 403 USUARIO_INACTIVO.
+ */
+export type CuentaDesactivadaListener = () => void;
+
+/**
  * Estado de contacto con el backend, visible para la UI (iteracion 32):
  * 'verificando' al arrancar, 'disponible' tras un contacto exitoso,
  * 'indisponible' cuando la API no responde (la app sigue en modo demo,
@@ -51,6 +57,7 @@ export class ApiEnlaceService {
   private disponible_ = true;
   private readonly listeners = new Set<EnlaceListener>();
   private readonly oyentesSesionExpirada = new Set<SesionExpiradaListener>();
+  private readonly oyentesCuentaDesactivada = new Set<CuentaDesactivadaListener>();
 
   /** Estado de contacto con la API para la UI (signal reactiva). */
   readonly estado = signal<EstadoApi>('verificando');
@@ -71,6 +78,14 @@ export class ApiEnlaceService {
   /** Suscribe un callback que corre cuando el backend invalida la sesion (14.6). */
   onSesionExpirada(listener: SesionExpiradaListener): void {
     this.oyentesSesionExpirada.add(listener);
+  }
+
+  /**
+   * Suscribe un callback que corre cuando el backend rechaza al actor por
+   * cuenta desactivada (14.7): 403 USUARIO_INACTIVO con token vigente.
+   */
+  onCuentaDesactivada(listener: CuentaDesactivadaListener): void {
+    this.oyentesCuentaDesactivada.add(listener);
   }
 
   /** Marca el estado y notifica solo en transicion. */
@@ -196,6 +211,9 @@ export class ApiEnlaceService {
     if (this.esCaidaReal(error)) {
       this.marcar(false);
     } else if (error instanceof HttpErrorResponse) {
+      if (this.esCuentaDesactivada(error)) {
+        this.notificarCuentaDesactivada();
+      }
       if (this.esSesionExpirada(error)) {
         this.notificarSesionExpirada();
       }
@@ -220,9 +238,29 @@ export class ApiEnlaceService {
     return codigo === 'SESION_INVALIDA';
   }
 
+  /**
+   * 403 con codigo USUARIO_INACTIVO significa que el token sigue siendo
+   * criptograficamente valido pero la cuenta fue desactivada por un Admin
+   * en pleno uso (docs 14.7). La sesion no se limpia aqui: es decision de
+   * la app (el shell la cierra y avisa); el estado de salud de la API no
+   * cambia porque el backend esta vivo.
+   */
+  private esCuentaDesactivada(error: HttpErrorResponse): boolean {
+    if (error.status !== 403 || this.tokenAlmacen.leer() === null) {
+      return false;
+    }
+    const cuerpo = error.error as { detail?: { codigo?: unknown }; codigo?: unknown } | null;
+    const codigo = cuerpo?.detail?.codigo ?? cuerpo?.codigo;
+    return codigo === 'USUARIO_INACTIVO';
+  }
+
   private notificarSesionExpirada(): void {
     this.tokenAlmacen.limpiar();
     this.oyentesSesionExpirada.forEach((oyente) => oyente());
+  }
+
+  private notificarCuentaDesactivada(): void {
+    this.oyentesCuentaDesactivada.forEach((oyente) => oyente());
   }
 }
 

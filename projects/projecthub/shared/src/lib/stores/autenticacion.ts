@@ -86,12 +86,27 @@ export class AutenticacionService {
    */
   readonly expiraciones = signal(0);
 
+  /**
+   * Veces que el backend rechazo al actor por cuenta desactivada en pleno
+   * uso (14.7). La app shell reacciona: cierra sesion y redirige a
+   * /login?desactivada=1 con su propio aviso.
+   */
+  readonly desactivaciones = signal(0);
+
   constructor() {
     // Cuando ApiEnlaceService detecta el 401 SESION_INVALIDA limpia el
     // token; aqui se refleja en el signal espejo y en la sesion simulada.
-    inject(ApiEnlaceService).onSesionExpirada(() => {
+    const enlace = inject(ApiEnlaceService);
+    enlace.onSesionExpirada(() => {
       this.cerrarSesion();
       this.expiraciones.update((n) => n + 1);
+    });
+    // El 403 USUARIO_INACTIVO no limpia el token en el enlace (la identidad
+    // sigue siendo valida, la cuenta no): cerrar la sesion es decision de la
+    // app, que aqui se refleja igual que una expiracion.
+    enlace.onCuentaDesactivada(() => {
+      this.cerrarSesion();
+      this.desactivaciones.update((n) => n + 1);
     });
   }
 
