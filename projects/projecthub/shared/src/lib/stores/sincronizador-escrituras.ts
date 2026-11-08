@@ -240,6 +240,9 @@ export function proporcionarSincronizacionBackend(): EnvironmentProviders {
       // el contexto de inyeccion ya no existe (causa del NG0203).
       const sincronizador = inject(SincronizadorEscrituras);
       const autenticacion = inject(AutenticacionService);
+      // Sondeo de salud (iteracion 32): publica en la UI si el backend
+      // responde; mientras no responde la app sigue en modo demo.
+      inject(ApiEnlaceService).iniciarSondeoSalud();
       await sincronizarStores();
       // Fase 14: si hay token guardado, restaura la sesion real (GET /me).
       // Nunca lanza: sin backend valido deja la app en modo demo.

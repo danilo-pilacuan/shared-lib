@@ -5,7 +5,7 @@
  * elegante: estado vacio, no excepcion). El actor viaja en X-Actor-Id.
  */
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, InjectionToken, inject } from '@angular/core';
+import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
 import { TokenAlmacen } from './autenticacion';
@@ -25,6 +25,20 @@ const ACTOR_HEADER = 'X-Actor-Id';
 /** Callback opcional para avisar a las apps que el backend cayo (o volvio). */
 export type EnlaceListener = (disponible: boolean) => void;
 
+/**
+ * Estado de contacto con el backend, visible para la UI (iteracion 32):
+ * 'verificando' al arrancar, 'disponible' tras un contacto exitoso,
+ * 'indisponible' cuando la API no responde (la app sigue en modo demo,
+ * degradacion elegante, pero el usuario debe saberlo).
+ */
+export type EstadoApi = 'verificando' | 'disponible' | 'indisponible';
+
+/** Milisegundos entre sondeos de salud con el backend arriba. */
+export const SONDEO_SALUD_MS = 15000;
+
+/** Milisegundos de reintento acelerado cuando el backend esta caido. */
+export const SONDEO_REINTENTO_MS = 5000;
+
 @Injectable({ providedIn: 'root' })
 export class ApiEnlaceService {
   private readonly http = inject(HttpClient);
@@ -32,6 +46,12 @@ export class ApiEnlaceService {
   private readonly tokenAlmacen = inject(TokenAlmacen);
   private disponible_ = true;
   private readonly listeners = new Set<EnlaceListener>();
+
+  /** Estado de contacto con la API para la UI (signal reactiva). */
+  readonly estado = signal<EstadoApi>('verificando');
+
+  private sondeoIniciado = false;
+  private temporizadorSondeo: ReturnType<typeof setInterval> | null = null;
 
   /** Indica si el ultimo contacto con la API fue exitoso. */
   get disponible(): boolean {
@@ -45,10 +65,49 @@ export class ApiEnlaceService {
 
   /** Marca el estado y notifica solo en transicion. */
   marcar(disponible: boolean): void {
+    this.estado.set(disponible ? 'disponible' : 'indisponible');
     if (this.disponible_ !== disponible) {
       this.disponible_ = disponible;
       this.listeners.forEach((l) => l(disponible));
     }
+  }
+
+  /**
+   * Sondeo puntual de salud contra GET /api/salud (iteracion 32): marca el
+   * estado segun el resultado y lo devuelve. Nunca lanza.
+   */
+  async sondear(): Promise<boolean> {
+    try {
+      await firstValueFrom(
+        this.http
+          .get<unknown>(`${this.baseUrl}/api/salud`)
+          .pipe(timeout(API_TIMEOUT_MS)),
+      );
+      this.marcar(true);
+      return true;
+    } catch {
+      this.marcar(false);
+      return false;
+    }
+  }
+
+  /**
+   * Sondeo periodico de salud: uno inmediato y luego un intervalo; mientras
+   * el backend esta caido reintenta mas rapido para anunciar la recuperacion
+   * sin retraso. Idempotente: una sola vez por app (shell y remotes).
+   */
+  iniciarSondeoSalud(): void {
+    if (this.sondeoIniciado) {
+      return;
+    }
+    this.sondeoIniciado = true;
+    const reprogramar = (disponible: boolean): void => {
+      this.temporizadorSondeo = setInterval(
+        () => void this.sondear().then(reprogramar),
+        disponible ? SONDEO_SALUD_MS : SONDEO_REINTENTO_MS,
+      );
+    };
+    void this.sondear().then(reprogramar);
   }
 
   /**

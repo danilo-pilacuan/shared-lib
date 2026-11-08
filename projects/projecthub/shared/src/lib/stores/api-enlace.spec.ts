@@ -58,6 +58,43 @@ describe('ApiEnlaceService', () => {
     const datos = await promesa;
     expect(datos).toEqual({ id: 'p9' });
   });
+
+  it('arranca en estado verificando y publica disponible tras sondeo exitoso', async () => {
+    expect(enlace.estado()).toBe('verificando');
+    const promesa = enlace.sondear();
+    const req = httpMock.expectOne('http://localhost:8100/api/salud');
+    req.flush({ estado: 'ok' });
+    expect(await promesa).toBe(true);
+    expect(enlace.estado()).toBe('disponible');
+  });
+
+  it('publica indisponible cuando el sondeo de salud falla', async () => {
+    const promesa = enlace.sondear();
+    const req = httpMock.expectOne('http://localhost:8100/api/salud');
+    req.error(new ProgressEvent('error'));
+    expect(await promesa).toBe(false);
+    expect(enlace.estado()).toBe('indisponible');
+  });
+
+  it('sondear de nuevo con exito restaura el estado disponible', async () => {
+    const caida = enlace.sondear();
+    httpMock.expectOne('http://localhost:8100/api/salud').error(new ProgressEvent('error'));
+    expect(await caida).toBe(false);
+    const subida = enlace.sondear();
+    httpMock.expectOne('http://localhost:8100/api/salud').flush({ estado: 'ok' });
+    expect(await subida).toBe(true);
+    expect(enlace.estado()).toBe('disponible');
+  });
+
+  it('iniciarSondeoSalud es idempotente (una sola suscripcion por app)', async () => {
+    enlace.iniciarSondeoSalud();
+    enlace.iniciarSondeoSalud();
+    // Solo un sondeo inicial a pesar de dos llamadas.
+    httpMock.expectOne('http://localhost:8100/api/salud').flush({ estado: 'ok' });
+    // La continuation del sondeo corre en microtarea posterior al flush.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(enlace.estado()).toBe('disponible');
+  });
 });
 
 describe('sincronizarStores', () => {
