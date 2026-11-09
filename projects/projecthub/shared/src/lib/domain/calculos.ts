@@ -15,6 +15,11 @@ export interface EtapaCalculable {
 
 const MS_POR_DIA = 86_400_000;
 
+/** Verifica que una cadena sea una fecha ISO parseable (Date.parse). */
+export function esFechaIso(valor: string): boolean {
+  return !Number.isNaN(Date.parse(valor));
+}
+
 /** Duracion en dias naturales (fin - inicio); minimo 1 dia para ponderar. */
 export function duracionDias(etapa: EtapaCalculable): number {
   const inicio = Date.parse(etapa.fechaInicio);
