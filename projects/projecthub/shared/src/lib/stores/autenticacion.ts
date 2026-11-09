@@ -8,7 +8,7 @@
  * (degradacion elegante, nunca excepcion).
  */
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, inject, runInInjectionContext, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
 import { API_TIMEOUT_MS, API_BASE_URL, ApiEnlaceService } from './api-enlace';
@@ -74,6 +74,8 @@ export class AutenticacionService {
   private readonly baseUrl = inject(API_BASE_URL);
   private readonly tokenAlmacen = inject(TokenAlmacen);
   private readonly sesion = inject(SESION_STORE, { optional: true }) ?? inject(SesionStore);
+  /** Capturado en el constructor: resincronizarStores corre tras await(s). */
+  private readonly inyector = inject(Injector);
 
   /** Token actual; signal espejo de TokenAlmacen (reactiva para la UI). */
   private readonly tokenSignal = signal<string | null>(this.tokenAlmacen.leer());
@@ -169,7 +171,10 @@ export class AutenticacionService {
    */
   private async resincronizarStores(): Promise<void> {
     try {
-      await sincronizarStores();
+      // iniciarSesion() se ejecuta tras await(s) HTTP: el contexto de
+      // inyeccion ya no existe (NG0203, it57) y sincronizarStores resuelve
+      // sus inject() dentro del inyector capturado en el constructor.
+      await runInInjectionContext(this.inyector, () => sincronizarStores());
     } catch {
       /* degradacion elegante: la app sigue con el estado local */
     }

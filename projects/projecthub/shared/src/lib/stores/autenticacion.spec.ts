@@ -7,6 +7,7 @@ import { provideHttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
+  TestRequest,
 } from '@angular/common/http/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ApiEnlaceService } from './api-enlace';
@@ -17,6 +18,23 @@ import {
 } from './autenticacion';
 import { SESION_STORE } from './sesion.store';
 import { Usuario } from '../domain/modelos';
+
+/** Colecciones que sincronizarStores descarga tras fijar la sesion (13.3). */
+const COLECCIONES_SYNC = ['usuarios', 'proyectos', 'etapas', 'entregables', 'bitacora'];
+
+/**
+ * Responde las 5 lecturas autoritativas del backend que sincronizarStores
+ * emite tras un login exitoso (it. 58): sin esto el HttpTestingController
+ * las reporta como peticiones abiertas y el test se cuelga hasta el timeout.
+ */
+async function responderSincronizacion(httpMock: HttpTestingController): Promise<void> {
+  await new Promise((resolver) => setTimeout(resolver, 0));
+  for (const coleccion of COLECCIONES_SYNC) {
+    httpMock
+      .match(`http://localhost:8100/api/${coleccion}`)
+      .forEach((req: TestRequest) => req.flush([]));
+  }
+}
 
 const DIANA: Usuario = {
   id: 'u-admin',
@@ -51,6 +69,7 @@ describe('AutenticacionService', () => {
     const promesa = servicio.iniciarSesion('diana@projecthub.local', 'clave');
     const req = httpMock.expectOne(LOGIN_URL);
     req.flush({ token: 'jwt-de-diana', usuario: DIANA });
+    await responderSincronizacion(httpMock);
     const usuario = await promesa;
     expect(usuario.id).toBe('u-admin');
     expect(TestBed.inject(TokenAlmacen).leer()).toBe('jwt-de-diana');
@@ -66,6 +85,7 @@ describe('AutenticacionService', () => {
       contrasena: 'clave',
     });
     req.flush({ token: 't', usuario: DIANA });
+    await responderSincronizacion(httpMock);
     await promesa;
   });
 
