@@ -143,7 +143,7 @@ describe('AutenticacionService', () => {
   it('cerrarSesion limpia token y sesion', async () => {
     TestBed.inject(TokenAlmacen).guardar('jwt-guardado');
     TestBed.inject(AutenticacionService);
-    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     servicio.cerrarSesion();
     expect(TestBed.inject(TokenAlmacen).leer()).toBeNull();
     expect(TestBed.inject(SESION_STORE).haySesion()).toBe(false);
@@ -154,7 +154,7 @@ describe('AutenticacionService', () => {
 
   it('401 SESION_INVALIDA en cualquier ruta cierra la sesion y cuenta la expiracion', async () => {
     TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
-    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
       .expectOne('http://localhost:8100/api/usuarios')
@@ -171,7 +171,7 @@ describe('AutenticacionService', () => {
 
   it('401 sin codigo SESION_INVALIDA no cierra la sesion (login fallido)', async () => {
     TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
-    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
       .expectOne('http://localhost:8100/api/usuarios')
@@ -186,7 +186,7 @@ describe('AutenticacionService', () => {
 
   it('403 USUARIO_INACTIVO con token vigente cierra la sesion y cuenta la desactivacion', async () => {
     TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
-    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
       .expectOne('http://localhost:8100/api/usuarios')
@@ -204,7 +204,7 @@ describe('AutenticacionService', () => {
 
   it('403 sin codigo USUARIO_INACTIVO no cierra la sesion (permiso denegado)', async () => {
     TestBed.inject(TokenAlmacen).guardar('jwt-vigente');
-    TestBed.inject(SESION_STORE).seleccionar('u-admin');
+    TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
       .expectOne('http://localhost:8100/api/usuarios')
@@ -284,11 +284,10 @@ describe('ApiEnlaceService con sesion real', () => {
     await promesa;
   });
 
-  it('PUT de sincronizacion adjunta Bearer y X-Actor-Id', async () => {
-    const promesa = enlace.enviar('PUT', '/api/sincronizacion', {}, 'u-admin');
+  it('PUT de sincronizacion no envia header de actor simulado', async () => {
+    const promesa = enlace.enviar('PUT', '/api/sincronizacion', {});
     const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
     expect(req.request.headers.get('Authorization')).toBe('Bearer jwt-de-sesion');
-    expect(req.request.headers.get('X-Actor-Id')).toBe('u-admin');
     req.flush({});
     await promesa;
   });

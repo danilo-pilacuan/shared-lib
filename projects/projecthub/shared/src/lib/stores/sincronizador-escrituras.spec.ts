@@ -15,6 +15,7 @@ import {
   SincronizadorEscrituras,
   UsuarioStore,
 } from './index';
+import { Usuario } from '../domain/modelos';
 
 describe('SincronizadorEscrituras', () => {
   let httpMock: HttpTestingController;
@@ -22,6 +23,15 @@ describe('SincronizadorEscrituras', () => {
   let usuarioStore: UsuarioStore;
   let sesionStore: SesionStore;
   let sincronizador: SincronizadorEscrituras;
+
+  /** Usuario autenticado de los tests (equivale a DIANA del backend). */
+  const DIANA: Usuario = {
+    id: 'u-admin',
+    nombre: 'Diana Admin',
+    correo: 'diana@projecthub.local',
+    roles: ['Admin'],
+    activo: true,
+  };
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -31,17 +41,17 @@ describe('SincronizadorEscrituras', () => {
     projectStore = TestBed.inject(ProjectStore);
     usuarioStore = TestBed.inject(UsuarioStore);
     sesionStore = TestBed.inject(SESION_STORE);
-    sesionStore.seleccionar('u-admin');
+    sesionStore.fijarUsuario(DIANA);
     sincronizador = TestBed.inject(SincronizadorEscrituras);
-    // Los pushes requieren actor: sesion simulada con usuario semilla.
-    sesionStore.seleccionar('u-admin');
+    // Los pushes requieren actor: sesion real con el usuario autenticado.
+    sesionStore.fijarUsuario(DIANA);
   });
 
   afterEach(() => {
     httpMock.verify();
   });
 
-  it('no empuja sin sesion activa (modo demo): no hay actor valido', async () => {
+  it('no empuja sin sesion activa: no hay actor valido', async () => {
     sesionStore.cerrar();
     expect(await sincronizador.empujar()).toBe(false);
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));

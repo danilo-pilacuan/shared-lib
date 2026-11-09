@@ -1,33 +1,19 @@
 /**
- * Sesion simulada (docs/funcionalidades.md 1.6): el usuario activo determina
- * todos los permisos. Store con signals; instancia unica via InjectionToken.
+ * Sesion real (docs/funcionalidades.md 10.3): el usuario activo lo fija la
+ * autenticacion (login o restauracion del token); no existe sesion simulada
+ * ni cambio de identidad sin credenciales. Store con signals; instancia
+ * unica via InjectionToken.
  */
-import { Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
+import { Injectable, InjectionToken, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Rol } from '../domain/catalogos';
 import { Usuario } from '../domain/modelos';
-import { USUARIOS_SEMILLA } from './semilla';
-
-/** Catalogo de usuarios disponible para la sesion simulada. */
-export interface SesionState {
-  readonly usuarios: readonly Usuario[];
-  readonly usuarioActivoId: string | null;
-}
 
 @Injectable({ providedIn: 'root' })
 export class SesionStore {
-  private readonly usuariosSignal = signal<readonly Usuario[]>(USUARIOS_SEMILLA);
-  private readonly usuarioActivoIdSignal = signal<string | null>(null);
+  private readonly usuarioSignal: WritableSignal<Usuario | null> = signal(null);
 
-  /** Usuarios activos: solo ellos pueden ser usuario activo (1.8). */
-  readonly usuariosActivos = computed(() =>
-    this.usuariosSignal().filter((u) => u.activo),
-  );
-
-  readonly usuarioActivo = computed<Usuario | null>(() => {
-    const id = this.usuarioActivoIdSignal();
-    if (id === null) return null;
-    return this.usuariosSignal().find((u) => u.id === id) ?? null;
-  });
+  /** Usuario autenticado; null si no hay sesion. */
+  readonly usuarioActivo = computed<Usuario | null>(() => this.usuarioSignal());
 
   /** Roles efectivos del usuario activo; vacio si no hay sesion. */
   readonly rolesActivos = computed<readonly Rol[]>(
@@ -36,37 +22,21 @@ export class SesionStore {
 
   readonly haySesion = computed(() => this.usuarioActivo() !== null);
 
-  /** Cambia el usuario activo; rechaza usuarios inexistentes o inactivos (1.8). */
-  seleccionar(usuarioId: string): void {
-    const usuario = this.usuariosSignal().find((u) => u.id === usuarioId);
-    if (!usuario) {
-      throw new Error(`Usuario "${usuarioId}" no existe.`);
-    }
-    if (!usuario.activo) {
+  /**
+   * Fija el usuario de la sesion (10.3). Solo la autenticacion lo invoca en
+   * produccion (los tests lo usan para simular una sesion iniciada); un
+   * usuario inactivo no puede iniciar sesion (1.8). `null` cierra la sesion.
+   */
+  fijarUsuario(usuario: Usuario | null): void {
+    if (usuario !== null && !usuario.activo) {
       throw new Error('Un usuario inactivo no puede iniciar sesion.');
     }
-    this.usuarioActivoIdSignal.set(usuarioId);
+    this.usuarioSignal.set(usuario);
   }
 
-  /**
-   * Registra un usuario en el catalogo de la sesion si no existe (fase 14):
-   * el usuario autenticado puede venir del backend (alta nueva) y no estar
-   * en la semilla. Si ya existe, lo reemplaza por la version actualizada.
-   */
-  registrarUsuario(usuario: Usuario): void {
-    this.usuariosSignal.update((lista) => {
-      const indice = lista.findIndex((u) => u.id === usuario.id);
-      if (indice === -1) {
-        return [...lista, usuario];
-      }
-      const copia = [...lista];
-      copia[indice] = usuario;
-      return copia;
-    });
-  }
-
+  /** Cierra la sesion (el token lo gestiona AutenticacionService). */
   cerrar(): void {
-    this.usuarioActivoIdSignal.set(null);
+    this.usuarioSignal.set(null);
   }
 }
 

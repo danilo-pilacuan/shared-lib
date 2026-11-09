@@ -4,7 +4,7 @@
  * credenciales y devuelve un JWT (HS256) que esta capa guarda en localStorage
  * y adjunta como "Authorization: Bearer <token>" en cada llamada HTTP.
  * La sesion activa (SesionStore) queda fijada al usuario autenticado; si el
- * backend no responde, la app sigue en modo demo con la sesion simulada
+ * backend no responde se muestra el error y la app navega sin sesion
  * (degradacion elegante, nunca excepcion).
  */
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
@@ -14,6 +14,7 @@ import { timeout } from 'rxjs/operators';
 import { API_TIMEOUT_MS, API_BASE_URL, ApiEnlaceService } from './api-enlace';
 import { Usuario } from '../domain/modelos';
 import { SESION_STORE, SesionStore } from './sesion.store';
+import { sincronizarStores } from './sincronizacion';
 
 /** Clave de localStorage para el token de sesion. */
 const CLAVE_TOKEN = 'projecthub.token';
@@ -127,10 +128,11 @@ export class AutenticacionService {
     }
     this.tokenSignal.set(respuesta.token);
     this.tokenAlmacen.guardar(respuesta.token);
-    // El usuario autenticado debe existir en el catalogo de la sesion; si
-    // llego por el backend (usuario nuevo) se registra antes de seleccionarlo.
-    this.sesion.registrarUsuario(respuesta.usuario);
-    this.sesion.seleccionar(respuesta.usuario.id);
+    this.sesion.fijarUsuario(respuesta.usuario);
+    // Con la sesion real fijada se descarga el estado autoritativo del
+    // backend (10.3): el arranque anonimo no puede hacerlo por el 422 de
+    // sesion ausente y quedaria en semilla local.
+    await this.resincronizarStores();
     return respuesta.usuario;
   }
 
@@ -152,12 +154,24 @@ export class AutenticacionService {
           })
           .pipe(timeout(API_TIMEOUT_MS)),
       );
-      this.sesion.registrarUsuario(usuario);
-      this.sesion.seleccionar(usuario.id);
+      this.sesion.fijarUsuario(usuario);
       return usuario;
     } catch {
       this.cerrarSesion();
       return null;
+    }
+  }
+
+  /**
+   * Descarga las colecciones del backend tras fijar la sesion (13.3). Nunca
+   * lanza: si la API no responde los stores conservan su estado local y el
+   * SincronizadorEscrituras re-empujara los cambios al recuperar la API.
+   */
+  private async resincronizarStores(): Promise<void> {
+    try {
+      await sincronizarStores();
+    } catch {
+      /* degradacion elegante: la app sigue con el estado local */
     }
   }
 

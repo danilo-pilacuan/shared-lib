@@ -2,7 +2,7 @@
  * Cliente HTTP del backend FastAPI (docs/funcionalidades.md 13.3, 10.3).
  * Sincroniza colecciones del dominio contra http://localhost:8100 y, si la
  * API no responde, deja intactas las semillas en los stores (degradacion
- * elegante: estado vacio, no excepcion). El actor viaja en X-Actor-Id.
+ * elegante: estado vacio, no excepcion). La identidad viaja en el token de sesion (Authorization).
  */
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
@@ -21,8 +21,6 @@ export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', {
 /** Milisegundos de gracia para considerar caida el backend. */
 export const API_TIMEOUT_MS = 2500;
 
-const ACTOR_HEADER = 'X-Actor-Id';
-
 /** Callback opcional para avisar a las apps que el backend cayo (o volvio). */
 export type EnlaceListener = (disponible: boolean) => void;
 
@@ -38,7 +36,8 @@ export type CuentaDesactivadaListener = () => void;
 /**
  * Estado de contacto con el backend, visible para la UI (iteracion 32):
  * 'verificando' al arrancar, 'disponible' tras un contacto exitoso,
- * 'indisponible' cuando la API no responde (la app sigue en modo demo,
+ * 'indisponible' cuando la API no responde (la app sigue con datos de
+ * referencia de lectura,
  * degradacion elegante, pero el usuario debe saberlo).
  */
 export type EstadoApi = 'verificando' | 'disponible' | 'indisponible';
@@ -136,28 +135,24 @@ export class ApiEnlaceService {
   }
 
   /**
-   * Cabeceras de la peticion: actor simulado (X-Actor-Id, compatibilidad) y
-   * Bearer JWT cuando hay sesion real (fase 14).
+   * Cabeceras de la peticion: Authorization con token Bearer cuando hay sesion real (fase 14).
    */
-  private cabeceras(actorId?: string): Record<string, string> | undefined {
+  private cabeceras(): Record<string, string> | undefined {
     const cabeceras: Record<string, string> = {};
     const token = this.tokenAlmacen.leer();
     if (token !== null) {
       cabeceras['Authorization'] = `Bearer ${token}`;
     }
-    if (actorId) {
-      cabeceras[ACTOR_HEADER] = actorId;
-    }
     return Object.keys(cabeceras).length > 0 ? cabeceras : undefined;
   }
 
   /** GET de coleccion; null si la API no responde (fallback a semilla). */
-  async lista<T>(ruta: string, actorId?: string): Promise<readonly T[] | null> {
+  async lista<T>(ruta: string): Promise<readonly T[] | null> {
     try {
       const datos = await firstValueFrom(
         this.http
           .get<readonly T[]>(`${this.baseUrl}${ruta}`, {
-            headers: this.cabeceras(actorId),
+            headers: this.cabeceras(),
           })
           .pipe(timeout(API_TIMEOUT_MS)),
       );
@@ -174,14 +169,13 @@ export class ApiEnlaceService {
     metodo: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     ruta: string,
     cuerpo: unknown,
-    actorId: string,
   ): Promise<T | null> {
     try {
       const datos = await firstValueFrom(
         this.http
           .request<T>(metodo, `${this.baseUrl}${ruta}`, {
             body: cuerpo,
-            headers: this.cabeceras(actorId),
+            headers: this.cabeceras(),
           })
           .pipe(timeout(API_TIMEOUT_MS)),
       );
@@ -196,7 +190,7 @@ export class ApiEnlaceService {
   /**
    * Clasifica el error de contacto con la API. Solo un problema de red,
    * timeout o un 5xx del servidor consideran al backend caido: un 4xx
-   * (VALIDACION 422 por sesion ausente en modo demo, 404, 409) demuestra
+   * (VALIDACION 422 por sesion ausente, 404, 409) demuestra
    * que la API esta viva y rechazo la peticion (mitigacion VULN-002),
    * de modo que el banner no anuncia una caida inexistente.
    */

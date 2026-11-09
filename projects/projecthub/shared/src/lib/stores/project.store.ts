@@ -61,6 +61,8 @@ export class ProjectStore {
   private readonly etapasSignal = signal<readonly EtapaTrabajo[]>(ETAPAS_SEMILLA);
   private readonly entregablesSignal = signal<readonly Entregable[]>(ENTREGABLES_SEMILLA);
   private readonly bitacoraSignal = signal<readonly BitacoraEntrada[]>(BITACORA_SEMILLA);
+  /** Catalogo de usuarios del backend (13.3); referencia del dominio, no semilla. */
+  private readonly usuariosSignal = signal<readonly Usuario[]>(USUARIOS_SEMILLA);
 
   /** Reemplaza el estado con datos del backend (13.3); no lanza. */
   cargarDesdeBackend(datos: {
@@ -68,11 +70,15 @@ export class ProjectStore {
     readonly etapas: readonly EtapaTrabajo[];
     readonly entregables: readonly Entregable[];
     readonly bitacora: readonly BitacoraEntrada[];
+    readonly usuarios?: readonly Usuario[];
   }): void {
     this.proyectosSignal.set(datos.proyectos);
     this.etapasSignal.set(datos.etapas);
     this.entregablesSignal.set(datos.entregables);
     this.bitacoraSignal.set(datos.bitacora);
+    if (datos.usuarios) {
+      this.usuariosSignal.set(datos.usuarios);
+    }
   }
 
   // ---------- Lecturas ----------
@@ -483,7 +489,7 @@ export class ProjectStore {
   }
 
   private exigirResponsableActivo(responsableId: string): void {
-    const responsable = USUARIOS_SEMILLA.find((u) => u.id === responsableId);
+    const responsable = this.usuariosSignal().find((u) => u.id === responsableId);
     if (!responsable) {
       throw new ErrorEntidadNoEncontrada('Usuario', responsableId);
     }

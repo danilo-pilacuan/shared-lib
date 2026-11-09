@@ -76,6 +76,15 @@ export class SincronizadorEscrituras {
     this.listo = true;
   }
 
+  /** Re-ancla el estado tras un cambio de identidad (login): los datos
+   * descargados por la re-sincronizacion del login no son "cambios locales
+   * pendientes"; se marcan como confirmados y se borra el eco del servidor
+   * para que el proximo cambio real dispare el push. */
+  reBaselinear(): void {
+    this.reBaselinearConfirmadas();
+    this.aplicada = null;
+  }
+
   /**
    * Confirma como enviadas las entradas de bitacora presentes en los
    * stores tras la carga inicial (13.3). Sin esto, la primera lectura del
@@ -159,9 +168,9 @@ export class SincronizadorEscrituras {
 
   /** Empuja el estado actual; reprograma si hubo cambios durante el envio. */
   async empujar(): Promise<boolean> {
-    // Sin sesion activa (modo demo, fase 13) no hay actor valido: el backend
-    // rechazaria la escritura con 404 (ENTIDAD_NO_ENCONTRADA). Los cambios
-    // de demo son efimeros: se omite el push.
+    // Sin sesion activa no hay token de autorizacion: el backend rechazaria
+    // la escritura con 422. Los cambios sin sesion son efimeros: se omite el
+    // push y la sincronizacion los retomara al iniciar sesion.
     if (this.actorId() === null) {
       return false;
     }
@@ -191,7 +200,6 @@ export class SincronizadorEscrituras {
         'PUT',
         '/api/sincronizacion',
         cuerpo,
-        this.actorId() as string,
       );
       if (respuesta !== null) {
         this.conCambiosNoEnviados = false;
@@ -211,8 +219,8 @@ export class SincronizadorEscrituras {
 
   /**
    * Actor de las escrituras: el usuario de la sesion activa (13.4: "durante
-   * la sesion" el cliente empuja). Sin sesion (modo demo inicial) devuelve
-   * null y el push se omite: no existe un actor 'sistema' en el backend.
+   * la sesion" el cliente empuja). Sin sesion devuelve null y el push se
+   * omite: no existe un actor 'sistema' en el backend.
    */
   private actorId(): string | null {
     return this.sesion.usuarioActivo()?.id ?? null;
@@ -279,8 +287,7 @@ export class SincronizadorEscrituras {
  * para shell y remotes. Resuelve SincronizadorEscrituras dentro de
  * ENVIRONMENT_INITIALIZER (contexto de inyeccion garantizado: evita el
  * NG0203 de llamar inject() tras un await) y enciende el efecto de escritura;
- * el initializer async solo hace la carga inicial del backend. Llamar
- * preparar() tras el await re-baselinea el efecto.
+ * el initializer async restaura la sesion y descarga el estado autoritativo.
  */
 export function proporcionarSincronizacionBackend(): EnvironmentProviders {
   return makeEnvironmentProviders([
@@ -301,12 +308,13 @@ export function proporcionarSincronizacionBackend(): EnvironmentProviders {
       const sincronizador = inject(SincronizadorEscrituras);
       const autenticacion = inject(AutenticacionService);
       // Sondeo de salud (iteracion 32): publica en la UI si el backend
-      // responde; mientras no responde la app sigue en modo demo.
+      // responde; mientras no responde la app sigue con datos de referencia.
       inject(ApiEnlaceService).iniciarSondeoSalud();
-      await sincronizarStores();
-      // Fase 14: si hay token guardado, restaura la sesion real (GET /me).
-      // Nunca lanza: sin backend valido deja la app en modo demo.
+      // Fase 14 primero: si hay token guardado, restaura la sesion (GET /me)
+      // para que la descarga inicial y el push viajen ya autenticados (sin
+      // sesion el backend responde 422 a las lecturas autoritativas).
       await autenticacion.restaurarSesion();
+      await sincronizarStores();
       sincronizador.preparar();
     }),
   ]);

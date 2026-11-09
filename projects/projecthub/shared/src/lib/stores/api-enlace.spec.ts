@@ -51,7 +51,7 @@ describe('ApiEnlaceService', () => {
   });
 
   it('un 4xx (sesion ausente, VULN-002) NO marca al backend caido', async () => {
-    // En modo demo (sin token) los GET de dominio ahora responden 422
+    // Sin sesion (sin token) los GET de dominio responden 422
     // VALIDACION: la API esta viva y solo rechazo la peticion anonima.
     const promesa = enlace.lista<Usuario>('/api/usuarios');
     const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
@@ -71,10 +71,10 @@ describe('ApiEnlaceService', () => {
     expect(enlace.disponible).toBe(false);
   });
 
-  it('envia el header X-Actor-Id cuando se pasa actor', async () => {
-    const promesa = enlace.enviar('POST', '/api/proyectos', { nombre: 'X' }, 'u-admin');
+  it('envia Authorization Bearer sin header de actor simulado', async () => {
+    const promesa = enlace.enviar('POST', '/api/proyectos', { nombre: 'X' });
     const req = httpMock.expectOne('http://localhost:8100/api/proyectos');
-    expect(req.request.headers.get('X-Actor-Id')).toBe('u-admin');
+    expect(req.request.headers.get('X-Actor-Id')).toBeNull();
     req.flush({ id: 'p9' });
     const datos = await promesa;
     expect(datos).toEqual({ id: 'p9' });
@@ -159,7 +159,7 @@ describe('sincronizarStores', () => {
   });
 
   it('conserva las semillas cuando la API rechaza la peticion anonima (422)', async () => {
-    // Modo demo sin sesion: los GET de dominio exigen actor (VULN-002) y
+    // Sin sesion: los GET de dominio exigen actor (VULN-002) y
     // responden 422; el fallback a semilla es el comportamiento esperado.
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
     for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {

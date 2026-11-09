@@ -42,6 +42,7 @@ export async function sincronizarStores(): Promise<void> {
       etapas: etapas ?? [],
       entregables: entregables ?? [],
       bitacora: bitacora ?? [],
+      usuarios: usuarios ?? [],
     });
   }
 }

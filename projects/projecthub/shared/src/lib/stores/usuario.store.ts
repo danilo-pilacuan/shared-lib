@@ -2,7 +2,8 @@
  * Store de usuarios (docs/funcionalidades.md 1.1, 1.3, 1.4, 1.8).
  * CRUD administrativo del catalogo de usuarios: crear, editar y desactivar
  * (sin borrar, para conservar el historial). Solo Admin administra usuarios.
- * El catalogo de la sesion simulada sigue en SesionStore (datos semilla).
+ * El catalogo se carga del backend (13.3); sin sesion es semilla de
+ * referencia de solo lectura (1.6).
  */
 import { Injectable, computed, signal } from '@angular/core';
 import { ROLES, Rol } from '../domain/catalogos';
@@ -99,7 +100,7 @@ export class UsuarioStore {
   // ---------- Validaciones ----------
 
   private exigirAdmin(actor: Usuario): void {
-    if (!actor || !USUARIOS_SEMILLA.some((u) => u.id === actor.id) || !actor.activo) {
+    if (!actor || !actor.activo || !this.usuariosSignal().some((u) => u.id === actor.id)) {
       throw new ErrorValidacion('Se requiere una sesion activa para administrar usuarios.');
     }
     if (!actor.roles.includes('Admin')) {
