@@ -401,8 +401,18 @@ export class ProjectStore {
     const proyecto = this.exigirProyecto(datos.proyectoId);
     this.exigirActorValido(actor);
     this.exigirEstadoEditable(proyecto.estado, 'cargar entregables');
+    // Nombre y version (it66): paridad con el backend (crear_entregable y
+    // la validacion de insumos del re-sync).
+    const nombre = datos.nombre.trim();
+    if (!nombre) {
+      throw new ErrorValidacion('El nombre del entregable es obligatorio.');
+    }
+    if (!Number.isInteger(datos.version) || datos.version < 1) {
+      throw new ErrorValidacion('La version del entregable debe ser al menos 1.');
+    }
     const entregable: Entregable = {
       ...datos,
+      nombre,
       id: nuevoId('ent'),
       aprobadoPorId: null,
       aprobadoEn: null,

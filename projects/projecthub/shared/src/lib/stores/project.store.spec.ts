@@ -413,6 +413,46 @@ describe('ProjectStore - entregables y aprobaciones', () => {
     expect(s.entregablesDeProyecto('p1').length).toBe(antes + 1);
   });
 
+  it('rechaza entregable sin nombre y con version menor a 1 (it66)', () => {
+    const s = store();
+    expect(() =>
+      s.crearEntregable(
+        {
+          proyectoId: 'p1',
+          etapa: 'Ejecucion',
+          nombre: '   ',
+          version: 2,
+          creadoPorId: PM.id,
+        },
+        ADMIN,
+      ),
+    ).toThrow(ErrorValidacion);
+    expect(() =>
+      s.crearEntregable(
+        {
+          proyectoId: 'p1',
+          etapa: 'Ejecucion',
+          nombre: 'Entregable valido',
+          version: 0,
+          creadoPorId: PM.id,
+        },
+        ADMIN,
+      ),
+    ).toThrow(ErrorValidacion);
+    // El nombre se normaliza con strip como en proyectos.
+    const normalizado = s.crearEntregable(
+      {
+        proyectoId: 'p1',
+        etapa: 'Ejecucion',
+        nombre: '  Con espacios  ',
+        version: 1,
+        creadoPorId: PM.id,
+      },
+      ADMIN,
+    );
+    expect(normalizado.nombre).toBe('Con espacios');
+  });
+
   it('el autor no puede aprobar su propio entregable (gate)', () => {
     const s = store();
     // Admin tiene permiso de aprobacion; si el entregable es suyo, el gate lo bloquea.
