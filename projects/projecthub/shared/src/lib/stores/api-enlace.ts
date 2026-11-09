@@ -1,8 +1,9 @@
 /**
  * Cliente HTTP del backend FastAPI (docs/funcionalidades.md 13.3, 10.3).
- * Sincroniza colecciones del dominio contra http://localhost:8100 y, si la
- * API no responde, deja intactas las semillas en los stores (degradacion
- * elegante: estado vacio, no excepcion). La identidad viaja en el token de sesion (Authorization).
+ * Sincroniza colecciones del dominio contra la API_BASE_URL_POR_DEFECTO y,
+ * si la API no responde, deja intactas las semillas en los stores
+ * (degradacion elegante: estado vacio, no excepcion). La identidad viaja en
+ * el token de sesion (Authorization).
  */
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
@@ -12,10 +13,18 @@ import { TimeoutError } from 'rxjs';
 import { TokenAlmacen } from './autenticacion';
 import { Usuario } from '../domain/modelos';
 
+/** URL base por defecto de la API (desarrollo y demo local, 13.3). */
+export const API_BASE_URL_POR_DEFECTO = 'http://localhost:8100';
+
+/** URL completa de una ruta de API sobre la base por defecto (specs). */
+export function urlApiPorDefecto(ruta: string): string {
+  return `${API_BASE_URL_POR_DEFECTO}${ruta}`;
+}
+
 /** URL base de la API; el shell puede sobreescribirla con el token. */
 export const API_BASE_URL = new InjectionToken<string>('API_BASE_URL', {
   providedIn: 'root',
-  factory: () => 'http://localhost:8100',
+  factory: () => API_BASE_URL_POR_DEFECTO,
 });
 
 /** Milisegundos de gracia para considerar caida el backend. */

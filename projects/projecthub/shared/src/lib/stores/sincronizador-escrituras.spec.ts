@@ -13,6 +13,7 @@ import {
   SESION_STORE,
   SesionStore,
   SincronizadorEscrituras,
+  urlApiPorDefecto,
   UsuarioStore,
 } from './index';
 import { Usuario } from '../domain/modelos';
@@ -55,11 +56,11 @@ describe('SincronizadorEscrituras', () => {
     sesionStore.cerrar();
     expect(await sincronizador.empujar()).toBe(false);
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
   });
 
   it('empuja el estado completo de los stores al backend', async () => {    const promesa = sincronizador.empujar();
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(req.request.method).toBe('PUT');
     expect(req.request.body.proyectos.length).toBe(projectStore.proyectos().length);
     expect(req.request.body.usuarios.length).toBe(usuarioStore.usuarios().length);
@@ -94,7 +95,7 @@ describe('SincronizadorEscrituras', () => {
       bitacora: [propia, ajena],
     });
     const promesa = sincronizador.empujar();
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(req.request.body.bitacora.map((b: { id: string }) => b.id)).toEqual(['b-propia']);
     // El servidor responde con la bitacora autoritativa (incluye la ajena,
     // registrada en servidor por el otro usuario): el eco la confirma y a
@@ -108,7 +109,7 @@ describe('SincronizadorEscrituras', () => {
     });
     expect(await promesa).toBe(true);
     const reintento = sincronizador.empujar();
-    const req2 = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req2 = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(req2.request.body.bitacora.map((b: { id: string }) => b.id)).toEqual([
       'b-propia',
       'b-ajena',
@@ -119,7 +120,7 @@ describe('SincronizadorEscrituras', () => {
 
   it('reporta false cuando la API no responde', async () => {
     const promesa = sincronizador.empujar();
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     req.error(new ProgressEvent('error'));
     expect(await promesa).toBe(false);
   });
@@ -128,7 +129,7 @@ describe('SincronizadorEscrituras', () => {
     TestBed.runInInjectionContext(() => sincronizador.observar());
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
   });
 
   it('empuja una sola vez tras una mutacion real del store', async () => {
@@ -136,7 +137,7 @@ describe('SincronizadorEscrituras', () => {
     sincronizador.preparar();
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
     usuarioStore.cargarDesdeBackend([
       {
         id: 'u-x',
@@ -148,7 +149,7 @@ describe('SincronizadorEscrituras', () => {
     ]);
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(req.request.method).toBe('PUT');
     expect(req.request.body.usuarios.map((u: { id: string }) => u.id)).toContain('u-x');
     req.flush({});
@@ -159,7 +160,7 @@ describe('SincronizadorEscrituras', () => {
     sincronizador.preparar();
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
     usuarioStore.cargarDesdeBackend([
       {
         id: 'u-x',
@@ -184,7 +185,7 @@ describe('SincronizadorEscrituras', () => {
     }, usuarioStore.usuarios()[0]);
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(req.request.method).toBe('PUT');
     req.flush({});
   });
@@ -194,7 +195,7 @@ describe('SincronizadorEscrituras', () => {
     sincronizador.preparar();
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
 
     usuarioStore.cargarDesdeBackend([
       {
@@ -234,7 +235,7 @@ describe('SincronizadorEscrituras', () => {
       entregables: [],
       bitacora: [],
     };
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     req.flush(estadoServidor);
 
     // La respuesta del servidor reemplaza el estado local (fuente de verdad
@@ -243,12 +244,12 @@ describe('SincronizadorEscrituras', () => {
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
     expect(usuarioStore.usuarios()[0]?.nombre).toBe('Usuario X Normalizado');
     expect(projectStore.proyectos().map((p) => p.id)).toContain('p-srv');
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
   });
 
   it('no toca los stores cuando la respuesta no trae colecciones', async () => {
     const promesa = sincronizador.empujar();
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     req.flush({ algo: 'no-colecciones' });
     expect(await promesa).toBe(true);
     expect(usuarioStore.usuarios().length).toBeGreaterThan(0);
@@ -261,7 +262,7 @@ describe('SincronizadorEscrituras', () => {
     sincronizador.preparar();
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 100));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
 
     // Cambio durante la caida: el PUT falla y queda pendiente.
     const enlace = TestBed.inject(ApiEnlaceService);
@@ -277,17 +278,17 @@ describe('SincronizadorEscrituras', () => {
     ]);
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
-    const fallido = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const fallido = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(fallido.request.body.usuarios.map((u: { id: string }) => u.id)).toContain('u-offline');
     fallido.error(new ProgressEvent('error'));
     await new Promise((r) => setTimeout(r, 50));
 
     // Sin nuevo cambio, la recuperacion sola debe disparar el re-push.
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
     enlace.marcar(true);
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
-    const reintento = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const reintento = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(reintento.request.method).toBe('PUT');
     expect(reintento.request.body.usuarios.map((u: { id: string }) => u.id)).toContain('u-offline');
     reintento.flush({});
@@ -306,7 +307,7 @@ describe('SincronizadorEscrituras', () => {
     enlace.marcar(true);
     await TestBed.inject(ApplicationRef).whenStable();
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
   });
 
   it('un empuje exitoso limpia la bandera de cambios no enviados', async () => {
@@ -314,7 +315,7 @@ describe('SincronizadorEscrituras', () => {
     TestBed.runInInjectionContext(() => sincronizador.conectarRecuperacion());
     enlace.marcar(false);
     const promesa = sincronizador.empujar();
-    const fallido = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const fallido = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     fallido.error(new ProgressEvent('error'));
     expect(await promesa).toBe(false);
     await new Promise((r) => setTimeout(r, 50));
@@ -323,7 +324,7 @@ describe('SincronizadorEscrituras', () => {
     // y un ciclo caida/recuperacion posterior ya no re-empuja.
     enlace.marcar(true);
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
-    const reintento = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const reintento = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     reintento.flush({});
     await new Promise((r) => setTimeout(r, 50));
 
@@ -331,6 +332,6 @@ describe('SincronizadorEscrituras', () => {
     await new Promise((r) => setTimeout(r, 50));
     enlace.marcar(true);
     await new Promise((r) => setTimeout(r, ESCRITURA_DEBOUNCE_MS + 150));
-    httpMock.expectNone('http://localhost:8100/api/sincronizacion');
+    httpMock.expectNone(urlApiPorDefecto('/api/sincronizacion'));
   });
 });

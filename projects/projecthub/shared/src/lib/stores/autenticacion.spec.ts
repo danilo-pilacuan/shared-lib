@@ -10,7 +10,7 @@ import {
   TestRequest,
 } from '@angular/common/http/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ApiEnlaceService } from './api-enlace';
+import { ApiEnlaceService, urlApiPorDefecto } from './api-enlace';
 import {
   AutenticacionService,
   ErrorAutenticacion,
@@ -31,7 +31,7 @@ async function responderSincronizacion(httpMock: HttpTestingController): Promise
   await new Promise((resolver) => setTimeout(resolver, 0));
   for (const coleccion of COLECCIONES_SYNC) {
     httpMock
-      .match(`http://localhost:8100/api/${coleccion}`)
+      .match(urlApiPorDefecto(`/api/${coleccion}`))
       .forEach((req: TestRequest) => req.flush([]));
   }
 }
@@ -44,8 +44,8 @@ const DIANA: Usuario = {
   activo: true,
 };
 
-const LOGIN_URL = 'http://localhost:8100/api/auth/login';
-const ME_URL = 'http://localhost:8100/api/auth/me';
+const LOGIN_URL = urlApiPorDefecto('/api/auth/login');
+const ME_URL = urlApiPorDefecto('/api/auth/me');
 
 describe('AutenticacionService', () => {
   let servicio: AutenticacionService;
@@ -177,7 +177,7 @@ describe('AutenticacionService', () => {
     TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
-      .expectOne('http://localhost:8100/api/usuarios')
+      .expectOne(urlApiPorDefecto('/api/usuarios'))
       .flush(
         { detail: { codigo: 'SESION_INVALIDA', mensaje: 'Tu sesion ha expirado.' } },
         { status: 401, statusText: 'Unauthorized' },
@@ -194,7 +194,7 @@ describe('AutenticacionService', () => {
     TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
-      .expectOne('http://localhost:8100/api/usuarios')
+      .expectOne(urlApiPorDefecto('/api/usuarios'))
       .flush({ detail: { codigo: 'CREDENCIALES_INVALIDAS' } }, { status: 401, statusText: 'Unauthorized' });
     await promesa;
     expect(TestBed.inject(TokenAlmacen).leer()).toBe('jwt-vigente');
@@ -209,7 +209,7 @@ describe('AutenticacionService', () => {
     TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
-      .expectOne('http://localhost:8100/api/usuarios')
+      .expectOne(urlApiPorDefecto('/api/usuarios'))
       .flush(
         { detail: { codigo: 'USUARIO_INACTIVO', mensaje: 'Tu cuenta fue desactivada.' } },
         { status: 403, statusText: 'Forbidden' },
@@ -227,7 +227,7 @@ describe('AutenticacionService', () => {
     TestBed.inject(SESION_STORE).fijarUsuario(DIANA);
     const promesa = TestBed.inject(ApiEnlaceService).lista('/api/usuarios');
     httpMock
-      .expectOne('http://localhost:8100/api/usuarios')
+      .expectOne(urlApiPorDefecto('/api/usuarios'))
       .flush(
         { detail: { codigo: 'PERMISO_DENEGADO', mensaje: 'Requiere Admin.' } },
         { status: 403, statusText: 'Forbidden' },
@@ -240,7 +240,7 @@ describe('AutenticacionService', () => {
 
   // ----- Cambio de contrasena (14.5) -----
 
-  const CONTRASENA_URL = 'http://localhost:8100/api/auth/contrasena';
+  const CONTRASENA_URL = urlApiPorDefecto('/api/auth/contrasena');
 
   it('cambiarContrasena hace PUT con Bearer y cuerpo camelCase', async () => {
     TestBed.inject(TokenAlmacen).guardar('jwt-de-diana');
@@ -298,7 +298,7 @@ describe('ApiEnlaceService con sesion real', () => {
 
   it('GET adjunta Authorization Bearer', async () => {
     const promesa = enlace.lista('/api/usuarios');
-    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/usuarios'));
     expect(req.request.headers.get('Authorization')).toBe('Bearer jwt-de-sesion');
     req.flush([]);
     await promesa;
@@ -306,7 +306,7 @@ describe('ApiEnlaceService con sesion real', () => {
 
   it('PUT de sincronizacion no envia header de actor simulado', async () => {
     const promesa = enlace.enviar('PUT', '/api/sincronizacion', {});
-    const req = httpMock.expectOne('http://localhost:8100/api/sincronizacion');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/sincronizacion'));
     expect(req.request.headers.get('Authorization')).toBe('Bearer jwt-de-sesion');
     req.flush({});
     await promesa;

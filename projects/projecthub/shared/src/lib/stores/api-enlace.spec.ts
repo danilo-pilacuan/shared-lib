@@ -7,7 +7,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ApiEnlaceService } from './api-enlace';
+import { ApiEnlaceService, urlApiPorDefecto } from './api-enlace';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
 import { PROYECTOS_SEMILLA, USUARIOS_SEMILLA } from './semilla';
@@ -32,7 +32,7 @@ describe('ApiEnlaceService', () => {
 
   it('descarga una coleccion y marca disponible', async () => {
     const promesa = enlace.lista<Usuario>('/api/usuarios');
-    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/usuarios'));
     expect(req.request.method).toBe('GET');
     req.flush(USUARIOS_SEMILLA);
     const datos = await promesa;
@@ -43,7 +43,7 @@ describe('ApiEnlaceService', () => {
 
   it('devuelve null y marca caida cuando el backend no responde', async () => {
     const promesa = enlace.lista<Usuario>('/api/usuarios');
-    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/usuarios'));
     req.error(new ProgressEvent('error'));
     const datos = await promesa;
     expect(datos).toBeNull();
@@ -54,7 +54,7 @@ describe('ApiEnlaceService', () => {
     // Sin sesion (sin token) los GET de dominio responden 422
     // VALIDACION: la API esta viva y solo rechazo la peticion anonima.
     const promesa = enlace.lista<Usuario>('/api/usuarios');
-    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/usuarios'));
     req.flush({ codigo: 'VALIDACION', mensaje: 'Sesion requerida' }, { status: 422, statusText: 'Unprocessable Entity' });
     const datos = await promesa;
     expect(datos).toBeNull();
@@ -64,7 +64,7 @@ describe('ApiEnlaceService', () => {
 
   it('un 5xx si marca al backend caido', async () => {
     const promesa = enlace.lista<Usuario>('/api/usuarios');
-    const req = httpMock.expectOne('http://localhost:8100/api/usuarios');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/usuarios'));
     req.flush({ codigo: 'ERROR_INTERNO' }, { status: 500, statusText: 'Internal Server Error' });
     const datos = await promesa;
     expect(datos).toBeNull();
@@ -73,7 +73,7 @@ describe('ApiEnlaceService', () => {
 
   it('envia Authorization Bearer sin header de actor simulado', async () => {
     const promesa = enlace.enviar('POST', '/api/proyectos', { nombre: 'X' });
-    const req = httpMock.expectOne('http://localhost:8100/api/proyectos');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/proyectos'));
     expect(req.request.headers.get('X-Actor-Id')).toBeNull();
     req.flush({ id: 'p9' });
     const datos = await promesa;
@@ -83,7 +83,7 @@ describe('ApiEnlaceService', () => {
   it('arranca en estado verificando y publica disponible tras sondeo exitoso', async () => {
     expect(enlace.estado()).toBe('verificando');
     const promesa = enlace.sondear();
-    const req = httpMock.expectOne('http://localhost:8100/api/salud');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/salud'));
     req.flush({ estado: 'ok' });
     expect(await promesa).toBe(true);
     expect(enlace.estado()).toBe('disponible');
@@ -91,7 +91,7 @@ describe('ApiEnlaceService', () => {
 
   it('publica indisponible cuando el sondeo de salud falla', async () => {
     const promesa = enlace.sondear();
-    const req = httpMock.expectOne('http://localhost:8100/api/salud');
+    const req = httpMock.expectOne(urlApiPorDefecto('/api/salud'));
     req.error(new ProgressEvent('error'));
     expect(await promesa).toBe(false);
     expect(enlace.estado()).toBe('indisponible');
@@ -99,10 +99,10 @@ describe('ApiEnlaceService', () => {
 
   it('sondear de nuevo con exito restaura el estado disponible', async () => {
     const caida = enlace.sondear();
-    httpMock.expectOne('http://localhost:8100/api/salud').error(new ProgressEvent('error'));
+    httpMock.expectOne(urlApiPorDefecto('/api/salud')).error(new ProgressEvent('error'));
     expect(await caida).toBe(false);
     const subida = enlace.sondear();
-    httpMock.expectOne('http://localhost:8100/api/salud').flush({ estado: 'ok' });
+    httpMock.expectOne(urlApiPorDefecto('/api/salud')).flush({ estado: 'ok' });
     expect(await subida).toBe(true);
     expect(enlace.estado()).toBe('disponible');
   });
@@ -111,7 +111,7 @@ describe('ApiEnlaceService', () => {
     enlace.iniciarSondeoSalud();
     enlace.iniciarSondeoSalud();
     // Solo un sondeo inicial a pesar de dos llamadas.
-    httpMock.expectOne('http://localhost:8100/api/salud').flush({ estado: 'ok' });
+    httpMock.expectOne(urlApiPorDefecto('/api/salud')).flush({ estado: 'ok' });
     // La continuation del sondeo corre en microtarea posterior al flush.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(enlace.estado()).toBe('disponible');
@@ -139,7 +139,7 @@ describe('sincronizarStores', () => {
   it('carga las colecciones del backend en los stores', async () => {
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
     for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
-      const req = httpMock.expectOne(`http://localhost:8100${ruta}`);
+      const req = httpMock.expectOne(urlApiPorDefecto(ruta));
       req.flush([]);
     }
     await promesa;
@@ -150,7 +150,7 @@ describe('sincronizarStores', () => {
   it('conserva las semillas cuando el backend no responde', async () => {
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
     for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
-      const req = httpMock.expectOne(`http://localhost:8100${ruta}`);
+      const req = httpMock.expectOne(urlApiPorDefecto(ruta));
       req.error(new ProgressEvent('error'));
     }
     await promesa;
@@ -163,7 +163,7 @@ describe('sincronizarStores', () => {
     // responden 422; el fallback a semilla es el comportamiento esperado.
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
     for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
-      const req = httpMock.expectOne(`http://localhost:8100${ruta}`);
+      const req = httpMock.expectOne(urlApiPorDefecto(ruta));
       req.flush({ codigo: 'VALIDACION' }, { status: 422, statusText: 'Unprocessable Entity' });
     }
     await promesa;
