@@ -14,9 +14,11 @@ import {
   inject,
   Injectable,
   NgZone,
+  Injector,
   effect,
   makeEnvironmentProviders,
   provideAppInitializer,
+  runInInjectionContext,
 } from '@angular/core';
 import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, Usuario } from '../domain/modelos';
 import { ApiEnlaceService } from './api-enlace';
@@ -307,6 +309,7 @@ export function proporcionarSincronizacionBackend(): EnvironmentProviders {
       // el contexto de inyeccion ya no existe (causa del NG0203).
       const sincronizador = inject(SincronizadorEscrituras);
       const autenticacion = inject(AutenticacionService);
+      const inyector = inject(Injector);
       // Sondeo de salud (iteracion 32): publica en la UI si el backend
       // responde; mientras no responde la app sigue con datos de referencia.
       inject(ApiEnlaceService).iniciarSondeoSalud();
@@ -314,7 +317,9 @@ export function proporcionarSincronizacionBackend(): EnvironmentProviders {
       // para que la descarga inicial y el push viajen ya autenticados (sin
       // sesion el backend responde 422 a las lecturas autoritativas).
       await autenticacion.restaurarSesion();
-      await sincronizarStores();
+      // Tras el await el contexto de inyeccion ya no existe: la descarga
+      // inicial resuelve sus servicios dentro del inyector capturado (it. 57).
+      await runInInjectionContext(inyector, () => sincronizarStores());
       sincronizador.preparar();
     }),
   ]);
