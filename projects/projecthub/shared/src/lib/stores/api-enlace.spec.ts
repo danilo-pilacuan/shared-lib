@@ -6,8 +6,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ApiEnlaceService, urlApiPorDefecto } from './api-enlace';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiEnlaceService, SONDEO_SALUD_MS, urlApiPorDefecto } from './api-enlace';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
 import { PROYECTOS_SEMILLA, USUARIOS_SEMILLA } from './semilla';
@@ -115,6 +115,55 @@ describe('ApiEnlaceService', () => {
     // La continuation del sondeo corre en microtarea posterior al flush.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(enlace.estado()).toBe('disponible');
+  });
+
+  // Regresion (2026-11-17): iniciarSondeoSalud usaba setInterval DENTRO de
+  // reprogramar sin limpiar el intervalo anterior: cada sondeo duplicaba el
+  // numero de timers vivos y tras ~15 ciclos habia decenas de miles de XHR
+  // a /api/salud (observado: 37.788 peticiones y GB de RAM en la pestana).
+  it('iniciarSondeoSalud mantiene un solo sondeo activo (sin duplicar timers)', async () => {
+    vi.useFakeTimers();
+    try {
+      const rutaSalud = urlApiPorDefecto('/api/salud');
+      let totalSondeos = 0;
+      // Consume (flush) todas las peticiones pendientes y las cuenta: cada
+      // sondeo abre exactamente una; con el bug, el total crecia como 2^n.
+      const drenar = (): void => {
+        for (const peticion of httpMock.match(rutaSalud)) {
+          peticion.flush({ estado: 'ok' });
+          totalSondeos += 1;
+        }
+      };
+      enlace.iniciarSondeoSalud(); // sondeo inmediato #1
+      drenar();
+      // 10 ciclos completos (15 s cada uno con backend disponible).
+      for (let ciclo = 0; ciclo < 10; ciclo += 1) {
+        await vi.advanceTimersByTimeAsync(SONDEO_SALUD_MS);
+        drenar();
+      }
+      // Cada ciclo programa EXACTAMENTE un sondeo nuevo: 11 en total, no 2^10.
+      expect(totalSondeos).toBe(11);
+      expect(enlace.estado()).toBe('disponible');
+    } finally {
+      enlace.detenerSondeoSalud();
+      vi.useRealTimers();
+    }
+  });
+
+  it('detenerSondeoSalud cancela el sondeo programado', async () => {
+    vi.useFakeTimers();
+    try {
+      enlace.iniciarSondeoSalud();
+      httpMock.expectOne(urlApiPorDefecto('/api/salud')).flush({ estado: 'ok' });
+      await vi.advanceTimersByTimeAsync(0);
+      enlace.detenerSondeoSalud();
+      // Sin timer vivo: a los 5 minutos no hay nuevas peticiones.
+      await vi.advanceTimersByTimeAsync(300_000);
+      expect(httpMock.match(urlApiPorDefecto('/api/salud')).length).toBe(0);
+    } finally {
+      enlace.detenerSondeoSalud();
+      vi.useRealTimers();
+    }
   });
 });
 

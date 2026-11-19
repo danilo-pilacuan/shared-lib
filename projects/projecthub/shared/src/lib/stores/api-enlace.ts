@@ -71,7 +71,7 @@ export class ApiEnlaceService {
   readonly estado = signal<EstadoApi>('verificando');
 
   private sondeoIniciado = false;
-  private temporizadorSondeo: ReturnType<typeof setInterval> | null = null;
+  private temporizadorSondeo: ReturnType<typeof setTimeout> | null = null;
 
   /** Indica si el ultimo contacto con la API fue exitoso. */
   get disponible(): boolean {
@@ -125,9 +125,17 @@ export class ApiEnlaceService {
   }
 
   /**
-   * Sondeo periodico de salud: uno inmediato y luego un intervalo; mientras
-   * el backend esta caido reintenta mas rapido para anunciar la recuperacion
-   * sin retraso. Idempotente: una sola vez por app (shell y remotes).
+   * Sondeo periodico de salud: un solo sondeo activo. El siguiente se
+   * programa con setTimeout cuando el actual termina (cadena, no
+   * solapamiento): con API arriba uno cada 15 s y caido uno cada 5 s.
+   *
+   * Bug corregido (fuga de memoria + bucle de /api/salud): antes se usaba
+   * setInterval DENTRO de reprogramar, de modo que cada sondeo creaba un
+   * intervalo nuevo sin limpiar el anterior y el numero de timers vivos se
+   * duplicaba en cada ciclo (1->2->4->8...). Tras ~15 ciclos habia decenas
+   * de miles de timers disparando XHR en paralelo (observado: 37.788
+   * peticiones y gigabytes de RAM en la pestana). Idempotente: una sola
+   * cadena por app (shell y remotes).
    */
   iniciarSondeoSalud(): void {
     if (this.sondeoIniciado) {
@@ -135,12 +143,24 @@ export class ApiEnlaceService {
     }
     this.sondeoIniciado = true;
     const reprogramar = (disponible: boolean): void => {
-      this.temporizadorSondeo = setInterval(
+      this.temporizadorSondeo = setTimeout(
         () => void this.sondear().then(reprogramar),
         disponible ? SONDEO_SALUD_MS : SONDEO_REINTENTO_MS,
       );
     };
     void this.sondear().then(reprogramar);
+  }
+
+  /**
+   * Detiene la cadena de sondeos programada por iniciarSondeoSalud y permite
+   * volver a iniciarla (tests y apps que se re-instancian). Idempotente.
+   */
+  detenerSondeoSalud(): void {
+    this.sondeoIniciado = false;
+    if (this.temporizadorSondeo !== null) {
+      clearTimeout(this.temporizadorSondeo);
+      this.temporizadorSondeo = null;
+    }
   }
 
   /**
