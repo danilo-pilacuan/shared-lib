@@ -7,7 +7,7 @@
  * factory de provider o TestBed.runInInjectionContext).
  */
 import { inject } from '@angular/core';
-import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, Usuario } from '../domain/modelos';
+import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, RelacionDocumento, Usuario } from '../domain/modelos';
 import { ApiEnlaceService } from './api-enlace';
 import { ProjectStore } from './project.store';
 import { UsuarioStore } from './usuario.store';
@@ -19,6 +19,7 @@ export interface EstadoSincronizacion {
   readonly etapas: readonly EtapaTrabajo[];
   readonly entregables: readonly Entregable[];
   readonly bitacora: readonly BitacoraEntrada[];
+  readonly relaciones?: readonly RelacionDocumento[];
 }
 
 /** Carga las colecciones del backend en los stores; no lanza si falla. */
@@ -27,12 +28,13 @@ export async function sincronizarStores(): Promise<void> {
   const projectStore = inject(ProjectStore);
   const usuarioStore = inject(UsuarioStore);
 
-  const [usuarios, proyectos, etapas, entregables, bitacora] = await Promise.all([
+  const [usuarios, proyectos, etapas, entregables, bitacora, relaciones] = await Promise.all([
     enlace.lista<Usuario>('/api/usuarios'),
     enlace.lista<Proyecto>('/api/proyectos'),
     enlace.lista<EtapaTrabajo>('/api/etapas'),
     enlace.lista<Entregable>('/api/entregables'),
     enlace.lista<BitacoraEntrada>('/api/bitacora'),
+    enlace.lista<RelacionDocumento>('/api/relaciones'),
   ]);
 
   if (usuarios !== null) usuarioStore.cargarDesdeBackend(usuarios);
@@ -43,6 +45,7 @@ export async function sincronizarStores(): Promise<void> {
       entregables: entregables ?? [],
       bitacora: bitacora ?? [],
       usuarios: usuarios ?? [],
+      relaciones: relaciones ?? [],
     });
   }
 }

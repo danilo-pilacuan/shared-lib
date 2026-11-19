@@ -11,7 +11,7 @@ import {
   ErrorEstadoProyecto,
   ErrorValidacion,
 } from '../domain/errores';
-import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, Usuario } from '../domain/modelos';
+import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, RelacionDocumento, Usuario } from '../domain/modelos';
 import {
   avancePonderado,
   consumoTotal,
@@ -61,6 +61,8 @@ export class ProjectStore {
   private readonly etapasSignal = signal<readonly EtapaTrabajo[]>(ETAPAS_SEMILLA);
   private readonly entregablesSignal = signal<readonly Entregable[]>(ENTREGABLES_SEMILLA);
   private readonly bitacoraSignal = signal<readonly BitacoraEntrada[]>(BITACORA_SEMILLA);
+  /** Catalogo de relaciones entre documentos (16.1); vacio hasta que el backend lo sirva. */
+  private readonly relacionesSignal = signal<readonly RelacionDocumento[]>([]);
   /** Catalogo de usuarios del backend (13.3); referencia del dominio, no semilla. */
   private readonly usuariosSignal = signal<readonly Usuario[]>(USUARIOS_SEMILLA);
 
@@ -71,6 +73,7 @@ export class ProjectStore {
     readonly entregables: readonly Entregable[];
     readonly bitacora: readonly BitacoraEntrada[];
     readonly usuarios?: readonly Usuario[];
+    readonly relaciones?: readonly RelacionDocumento[];
   }): void {
     this.proyectosSignal.set(datos.proyectos);
     this.etapasSignal.set(datos.etapas);
@@ -78,6 +81,9 @@ export class ProjectStore {
     this.bitacoraSignal.set(datos.bitacora);
     if (datos.usuarios) {
       this.usuariosSignal.set(datos.usuarios);
+    }
+    if (datos.relaciones) {
+      this.relacionesSignal.set(datos.relaciones);
     }
   }
 
@@ -87,6 +93,12 @@ export class ProjectStore {
   readonly etapas = computed(() => this.etapasSignal());
   readonly entregables = computed(() => this.entregablesSignal());
   readonly bitacora = computed(() => this.bitacoraSignal());
+  /** Catalogo de relaciones entre documentos (16.1). */
+  readonly relaciones = computed(() => this.relacionesSignal());
+
+  relacionesDeProyecto(proyectoId: string): readonly RelacionDocumento[] {
+    return this.relacionesSignal().filter((r) => r.proyectoId === proyectoId);
+  }
 
   proyectoPorId(id: string): Proyecto | undefined {
     return this.proyectosSignal().find((p) => p.id === id);

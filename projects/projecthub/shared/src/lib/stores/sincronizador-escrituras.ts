@@ -21,6 +21,7 @@ import {
   runInInjectionContext,
 } from '@angular/core';
 import { BitacoraEntrada, Entregable, EtapaTrabajo, Proyecto, Usuario } from '../domain/modelos';
+import { RelacionDocumento } from '../domain/modelos';
 import { ApiEnlaceService } from './api-enlace';
 import { AutenticacionService } from './autenticacion';
 import { ProjectStore } from './project.store';
@@ -63,6 +64,7 @@ export class SincronizadorEscrituras {
     etapas: readonly EtapaTrabajo[];
     entregables: readonly Entregable[];
     bitacora: readonly BitacoraEntrada[];
+    relaciones?: readonly RelacionDocumento[];
   } | null = null;
   /**
    * Ids de bitacora confirmados por el servidor (iteracion 53, VULN-001).
@@ -106,6 +108,7 @@ export class SincronizadorEscrituras {
       const etapas = this.projectStore.etapas();
       const entregables = this.projectStore.entregables();
       const bitacora = this.projectStore.bitacora();
+      const relaciones = this.projectStore.relaciones();
       if (primeraLectura) {
         primeraLectura = false;
         this.reBaselinearConfirmadas();
@@ -114,7 +117,7 @@ export class SincronizadorEscrituras {
       if (!this.listo) {
         return;
       }
-      if (this.esEcoDelServidor(usuarios, proyectos, etapas, entregables, bitacora)) {
+      if (this.esEcoDelServidor(usuarios, proyectos, etapas, entregables, bitacora, relaciones)) {
         return;
       }
       this.programarFueraDeZone();
@@ -128,18 +131,26 @@ export class SincronizadorEscrituras {
     etapas: readonly EtapaTrabajo[],
     entregables: readonly Entregable[],
     bitacora: readonly BitacoraEntrada[],
+    relaciones?: readonly RelacionDocumento[],
   ): boolean {
     const aplicada = this.aplicada;
     if (aplicada === null) {
       return false;
     }
-    return (
+    const ecoBase =
       usuarios === aplicada.usuarios &&
       proyectos === aplicada.proyectos &&
       etapas === aplicada.etapas &&
       entregables === aplicada.entregables &&
-      bitacora === aplicada.bitacora
-    );
+      bitacora === aplicada.bitacora;
+    if (!ecoBase) {
+      return false;
+    }
+    // Si el servidor confirmo relaciones, tambien deben coincidir.
+    if (aplicada.relaciones !== undefined) {
+      return relaciones === aplicada.relaciones;
+    }
+    return true;
   }
 
   /** Programa un empuje con debounce; multiple cambios = un solo envio. */
@@ -197,6 +208,9 @@ export class SincronizadorEscrituras {
         etapas: this.projectStore.etapas(),
         entregables: this.projectStore.entregables(),
         bitacora,
+        // 16.1: el push siempre lleva la coleccion (puede ser vacia); el
+        // servidor la reemplaza si viene y conserva si no viene.
+        relaciones: this.projectStore.relaciones(),
       };
       const respuesta = await this.enlace.enviar<Record<string, unknown>>(
         'PUT',
@@ -240,6 +254,7 @@ export class SincronizadorEscrituras {
     const etapas = respuesta['etapas'];
     const entregables = respuesta['entregables'];
     const bitacora = respuesta['bitacora'];
+    const relaciones = respuesta['relaciones'];
     if (!Array.isArray(usuarios) && !Array.isArray(proyectos)) {
       return;
     }
@@ -259,11 +274,13 @@ export class SincronizadorEscrituras {
       Array.isArray(entregables) &&
       Array.isArray(bitacora)
     ) {
+      const relacionesConfirmadas = (Array.isArray(relaciones) ? relaciones : []) as RelacionDocumento[];
       this.projectStore.cargarDesdeBackend({
         proyectos: proyectos as Proyecto[],
         etapas: etapas as EtapaTrabajo[],
         entregables: entregables as Entregable[],
         bitacora: bitacora as BitacoraEntrada[],
+        relaciones: relacionesConfirmadas,
       });
       // Confirma las ids que el servidor devolvio; si la respuesta no trajo
       // bitacora (respuesta parcial de usuarios) conserva lo ya confirmado:
@@ -275,6 +292,7 @@ export class SincronizadorEscrituras {
         etapas: etapas as EtapaTrabajo[],
         entregables: entregables as Entregable[],
         bitacora: bitacora as BitacoraEntrada[],
+        relaciones: relacionesConfirmadas,
       };
     }
   }

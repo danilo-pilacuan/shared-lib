@@ -11,3 +11,4 @@ export * from './gates';
 export * from './csv';
 export * from './pdf';
 export * from './dependencias';
+export * from './relaciones';

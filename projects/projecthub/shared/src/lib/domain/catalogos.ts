@@ -73,6 +73,24 @@ export const ETIQUETA_TIPO_BITACORA: Readonly<Record<TipoBitacora, string>> = {
   cambio: 'Cambio',
 };
 
+/**
+ * Tipos de relacion entre documentos (16.1, ideas del dueno: grafo tipo
+ * obsidian de acuerdos, adendas y relaciones). Valores = contrato JSON con
+ * el backend Go; son etiquetas de arista del grafo de busqueda.
+ */
+export const TIPOS_RELACION = ['derivaDe', 'modifica', 'anula', 'relacionado', 'aclara'] as const;
+
+export type TipoRelacion = (typeof TIPOS_RELACION)[number];
+
+/** Etiqueta en espanol para UI. */
+export const ETIQUETA_TIPO_RELACION: Readonly<Record<TipoRelacion, string>> = {
+  derivaDe: 'Deriva de',
+  modifica: 'Modifica (adenda)',
+  anula: 'Anula',
+  relacionado: 'Relacionado con',
+  aclara: 'Aclara',
+};
+
 /** Acciones gobernadas por la matriz de responsabilidades (1.5). */
 export const ACCIONES = [
   'verProyecto',

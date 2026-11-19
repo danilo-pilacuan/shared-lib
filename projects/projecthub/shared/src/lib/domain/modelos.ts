@@ -2,7 +2,7 @@
  * Modelos de dominio (docs/funcionalidades.md 1.1, 2.1, 3.5, 4.1, 9.1).
  * Interfaces puras; el store los materializa con signals en fase posterior.
  */
-import { Accion, EstadoProyecto, EtapaCicloVida, Rol, TipoBitacora } from './catalogos';
+import { Accion, EstadoProyecto, EtapaCicloVida, Rol, TipoBitacora, TipoRelacion } from './catalogos';
 
 export interface Usuario {
   readonly id: string;
@@ -73,4 +73,42 @@ export interface PermisoMatriz {
   readonly etapa: EtapaCicloVida;
   readonly accion: Accion;
   readonly roles: readonly Rol[];
+}
+
+/**
+ * Enlace tipado entre dos documentos del mismo proyecto (16.1). Direccion
+ * origen -> destino; el par (origen, destino) solo puede enlazarse una vez.
+ */
+export interface RelacionDocumento {
+  readonly id: string;
+  readonly proyectoId: string;
+  readonly origenId: string; // entregable (ent-*)
+  readonly destinoId: string; // entregable (ent-*)
+  readonly tipo: TipoRelacion;
+  readonly creadoPorId: string;
+  readonly creadoEn: string; // ISO datetime del servidor
+  readonly nota: string | null;
+}
+
+/** Nodo del grafo de relaciones (16.1): documento con grado de conexiones. */
+export interface NodoGrafo {
+  readonly id: string;
+  readonly nombre: string;
+  readonly etapa: string;
+  readonly aprobado: boolean;
+  readonly grado: number;
+}
+
+/** Arista del grafo de relaciones (16.1): enlace tipado dirigido. */
+export interface AristaGrafo {
+  readonly id: string;
+  readonly origenId: string;
+  readonly destinoId: string;
+  readonly tipo: TipoRelacion;
+}
+
+/** Grafo de relaciones del proyecto para la visualizacion (16.1). */
+export interface GrafoRelaciones {
+  readonly nodos: readonly NodoGrafo[];
+  readonly aristas: readonly AristaGrafo[];
 }

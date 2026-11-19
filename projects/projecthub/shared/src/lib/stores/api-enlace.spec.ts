@@ -187,7 +187,7 @@ describe('sincronizarStores', () => {
 
   it('carga las colecciones del backend en los stores', async () => {
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
-    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
+    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora', '/api/relaciones']) {
       const req = httpMock.expectOne(urlApiPorDefecto(ruta));
       req.flush([]);
     }
@@ -198,7 +198,7 @@ describe('sincronizarStores', () => {
 
   it('conserva las semillas cuando el backend no responde', async () => {
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
-    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
+    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora', '/api/relaciones']) {
       const req = httpMock.expectOne(urlApiPorDefecto(ruta));
       req.error(new ProgressEvent('error'));
     }
@@ -211,7 +211,7 @@ describe('sincronizarStores', () => {
     // Sin sesion: los GET de dominio exigen actor (VULN-002) y
     // responden 422; el fallback a semilla es el comportamiento esperado.
     const promesa = TestBed.runInInjectionContext(() => sincronizarStores());
-    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora']) {
+    for (const ruta of ['/api/usuarios', '/api/proyectos', '/api/etapas', '/api/entregables', '/api/bitacora', '/api/relaciones']) {
       const req = httpMock.expectOne(urlApiPorDefecto(ruta));
       req.flush({ codigo: 'VALIDACION' }, { status: 422, statusText: 'Unprocessable Entity' });
     }

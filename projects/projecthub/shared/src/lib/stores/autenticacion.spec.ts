@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests de autenticacion (10.3, fase 14): login, restauracion de sesion y
  * adjuncion del Bearer token en ApiEnlaceService.
  */
@@ -20,10 +20,10 @@ import { SESION_STORE } from './sesion.store';
 import { Usuario } from '../domain/modelos';
 
 /** Colecciones que sincronizarStores descarga tras fijar la sesion (13.3). */
-const COLECCIONES_SYNC = ['usuarios', 'proyectos', 'etapas', 'entregables', 'bitacora'];
+const COLECCIONES_SYNC = ['usuarios', 'proyectos', 'etapas', 'entregables', 'bitacora', 'relaciones'];
 
 /**
- * Responde las 5 lecturas autoritativas del backend que sincronizarStores
+ * Responde las 6 lecturas autoritativas del backend que sincronizarStores
  * emite tras un login exitoso (it. 58): sin esto el HttpTestingController
  * las reporta como peticiones abiertas y el test se cuelga hasta el timeout.
  */
